@@ -1,0 +1,9 @@
+UDP -> DatagramSocket: https://docs.oracle.com/javase/7/docs/api/java/net/DatagramSocket.html
+    -> Exemplos de uso: https://www.geeksforgeeks.org/java-net-datagramsocket-class-java/
+                        https://www.baeldung.com/udp-in-java
+    -> Serializar classes: https://stackoverflow.com/questions/3997459/send-and-receive-serialize-object-on-udp
+                           https://stackoverflow.com/questions/17940423/send-object-over-udp-in-java
+
+
+Upper layer (client) envia broadcast às réplicas da blockchain (BC)
+C
