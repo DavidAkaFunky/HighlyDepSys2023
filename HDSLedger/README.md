@@ -12,3 +12,8 @@ Maven Lifecycle has 8-stages
 | Verification        | 😏          |
 | Installation        | 😏          |
 | Deployment          | mvn deploy  |
+
+# To run this outside of Intellij
+```
+java -classpath target/classes blockchain.Node
+```
