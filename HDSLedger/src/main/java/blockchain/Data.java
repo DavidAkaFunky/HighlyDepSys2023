@@ -24,6 +24,14 @@ public class Data implements Serializable {
         return messageId;
     }
 
+    public String getName() {
+        return name;
+    }
+
+    public int getData() {
+        return data;
+    }
+
     @Override
     public String toString() {
         return "Message from " + senderId + " ID: " + messageId + " Data [name = " + name + ", data = " + data + "]";
