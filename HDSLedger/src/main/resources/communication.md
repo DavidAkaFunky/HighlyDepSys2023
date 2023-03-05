@@ -73,9 +73,9 @@ upon event <init> do
 upon event <pp2pSend, dest, m> do
     while (true) do
         trigger <flp2pSend, dest, m>;
-upon event <sp2pDeliver, src, m> do
+upon event <flp2pDeliver, src, m> do
     if m ∉ delivered then
-        trigger <sp2pDeliver, src, m>;
+        trigger <pp2pDeliver, src, m>;
         delivered = delivered ⋃ { m };
 ```
 

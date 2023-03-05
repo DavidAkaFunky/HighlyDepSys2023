@@ -2,7 +2,7 @@ package utils;
 
 import java.io.*;
 
-public class Serialization {
+public class Serializer {
 
     public static <T extends Serializable> byte[] serialize(T obj) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -12,7 +12,7 @@ public class Serialization {
         return baos.toByteArray();
     }
 
-    public static <T extends Serializable> T unserialize(byte[] b, Class<T> cl) throws IOException, ClassNotFoundException {
+    public static <T extends Serializable> T deserialize(byte[] b, Class<T> cl) throws IOException, ClassNotFoundException {
         ByteArrayInputStream bais = new ByteArrayInputStream(b);
         ObjectInputStream ois = new ObjectInputStream(bais);
         Object o = ois.readObject();

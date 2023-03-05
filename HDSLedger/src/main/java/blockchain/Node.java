@@ -1,13 +1,10 @@
 package blockchain;
 
-import utils.Serialization;
-
 import java.io.IOException;
-import java.io.OutputStream;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map.Entry;
 
 public class Node {
 
@@ -18,57 +15,24 @@ public class Node {
         boolean isLeader = args[1].equals("L");
         String hostname = args[2];
         int port = Integer.parseInt(args[3]);
+        HashMap<Integer, Entry<InetAddress, Integer>> nodes
+            = new HashMap<Integer, Entry<InetAddress, Integer>>();
+        
+        // TODO: Parse config and add nodes
+        
+        try {
+            PerfectLink link = new PerfectLink(hostname, port, id);
 
-        try{
-
-            InetAddress address = InetAddress.getByName(hostname);
-            DatagramSocket socket = new DatagramSocket(port);
-
-            Thread listen = new Thread(() -> {
-
-                while(true){
-                    byte[] buf = new byte[256];
-                    DatagramPacket packet = new DatagramPacket(buf, buf.length);
-
-                    try{
-                        socket.receive(packet);
-                        byte[] mockByteArr = new byte[packet.getLength()];
-
-                        for (int i = 0; i < packet.getLength(); i++) {
-                            mockByteArr[i] = buf[i];
-                        }
-
-                        Data mock = Serialization.unserialize(mockByteArr, Data.class);
-                        System.out.println(mock);
-
-                    } catch (Exception e) {
-                        System.out.println(e);
-                    }
+            while (true) {
+                try {
+                    Data data = link.receive();
+                    System.out.println(data);
+                } catch (ClassNotFoundException | IOException e) {
+                    e.printStackTrace();
                 }
-
-            });
-
-            listen.start();
-
-            Thread send = new Thread(() -> {
-                Data d = new Data("test", 123);
-                try{
-                    byte[] buf = Serialization.serialize(d);
-
-                    DatagramPacket request = new DatagramPacket(buf, buf.length, address, 3000);
-                    socket.send(request);
-
-                } catch (Exception e) {
-                    System.out.println(e);
-                }
-
-            });
-
-            send.start();
-
-
+            }
         } catch (Exception e){
-            System.out.println(e);
+            e.printStackTrace();
         }
 
         System.out.println("Hello World!");
