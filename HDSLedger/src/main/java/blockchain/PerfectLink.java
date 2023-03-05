@@ -13,19 +13,32 @@ import java.io.IOException;
 import utils.Serializer;
 
 public class PerfectLink {
-    
-    private int nodeId;
-    private DatagramSocket socket;
-    private HashMap<Integer, Entry<InetAddress, Integer>> nodes;
-    private Set<Integer> receivedAcks = ConcurrentHashMap.newKeySet();
 
-    public PerfectLink(String address, int port, int nodeId, HashMap<Integer, Entry<InetAddress, Integer>> nodes) throws UnknownHostException, SocketException {
+    // Node identifier
+    private int nodeId;
+    // UDP Socket
+    private DatagramSocket socket;
+    // Map of all nodes in the network
+    private HashMap<Integer, Entry<InetAddress, Integer>> nodes;
+    // Set of received ACKs
+    private Set<Integer> receivedAcks = ConcurrentHashMap.newKeySet();
+    // Time to wait for an ACK before resending the message
+    static final private int ACK_WAIT_TIME = 1000;
+
+    public PerfectLink(String address, int port, int nodeId, HashMap<Integer, Entry<InetAddress, Integer>> nodes)
+            throws UnknownHostException, SocketException {
         this.socket = new DatagramSocket(port, InetAddress.getByName(address));
         this.nodeId = nodeId;
         this.nodes = nodes;
     }
 
+    /*
+     * Broadcasts a message to all nodes in the network
+     * 
+     * @param data The message to be broadcasted
+     */
     public void broadcast(Data data) {
+
         nodes.values().forEach((node) -> {
             try {
                 send(node.getKey(), node.getValue(), data);
@@ -35,32 +48,61 @@ public class PerfectLink {
         });
     }
 
+    /*
+     * Sends a message to a specific node with guarantee of delivery
+     * 
+     * @param address The address of the destination node
+     * 
+     * @param port The port of the destination node
+     * 
+     * @param data The message to be sent
+     */
     public void send(InetAddress address, int port, Data data) throws IOException, InterruptedException {
-        Thread t = new Thread(() -> {
+        // Spawn a new thread to send the message
+        // To avoid blocking while waiting for ACK
+        new Thread(() -> {
             try {
+
                 byte[] buf = Serializer.serialize(data);
+                DatagramPacket packet = new DatagramPacket(buf, buf.length, address, port);
                 int messageId = data.getMessageId();
+
+                // If the message is not ACK, within 1 second it will be resent
                 int count = 0;
                 while (!receivedAcks.contains(messageId)) {
                     System.out.println("Sending message for the " + ++count + " time");
-                    DatagramPacket packet = new DatagramPacket(buf, buf.length, address, port);
                     socket.send(packet);
-                    Thread.sleep(1000); // To avoid message spamming
+                    Thread.sleep(ACK_WAIT_TIME);
                 }
+
                 receivedAcks.remove(messageId);
+
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
             }
-        });
-        t.start();
+        }).start();
     }
 
+    /*
+     * Sends a message to a specific node without guarantee of delivery
+     * Mainly used to send ACKs, if they are lost, the original message will be
+     * resent
+     * 
+     * @param address The address of the destination node
+     * 
+     * @param port The port of the destination node
+     * 
+     * @param data The message to be sent
+     */
     public void unreliableSend(InetAddress address, int port, Data data) throws IOException {
         byte[] buf = Serializer.serialize(data);
         DatagramPacket packet = new DatagramPacket(buf, buf.length, address, port);
         socket.send(packet);
     }
 
+    /*
+     * Receives a message from any node in the network
+     */
     public Data receive() throws IOException, ClassNotFoundException {
         byte[] buf = new byte[256];
         DatagramPacket packet = new DatagramPacket(buf, buf.length);
@@ -70,6 +112,8 @@ public class PerfectLink {
 
         System.arraycopy(packet.getData(), packet.getOffset(), mockByteArr, 0, packet.getLength());
         Data data = Serializer.deserialize(mockByteArr, Data.class);
+
+        // TODO: If already received message, discard it
 
         if (data.getName().equals("ACK")) {
             receivedAcks.add(data.getMessageId());
