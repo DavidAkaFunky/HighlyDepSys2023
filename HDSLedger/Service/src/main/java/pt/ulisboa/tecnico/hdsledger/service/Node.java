@@ -1,4 +1,6 @@
-package blockchain;
+package pt.ulisboa.tecnico.hdsledger.service;
+
+import pt.ulisboa.tecnico.hdsledger.utilities.ConfigParser;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -6,8 +8,6 @@ import java.util.HashMap;
 import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import utils.ConfigParser;
 
 public class Node {
 
@@ -25,7 +25,7 @@ public class Node {
             LOGGER.log(Level.INFO, "{0} - Node {0} at {1}:{2} is leader: {3}", new Object[] { id, hostname, port, isLeader });
 
             // Parse config file to know where all nodes are
-            ConfigParser parser = new ConfigParser(id, "config.txt");
+            ConfigParser parser = new ConfigParser(id);
             HashMap<Integer, Entry<InetAddress, Integer>> nodes = parser.parse();
 
             // Abstraction to send and receive messages

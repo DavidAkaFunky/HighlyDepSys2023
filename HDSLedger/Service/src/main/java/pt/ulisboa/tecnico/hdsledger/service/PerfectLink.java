@@ -1,4 +1,6 @@
-package blockchain;
+package pt.ulisboa.tecnico.hdsledger.service;
+
+import pt.ulisboa.tecnico.hdsledger.utilities.Serializer;
 
 import java.net.InetAddress;
 import java.net.SocketException;
@@ -10,7 +12,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.IOException;
-import utils.Serializer;
 
 public class PerfectLink {
 

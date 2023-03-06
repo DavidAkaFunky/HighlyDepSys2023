@@ -1,4 +1,4 @@
-package blockchain;
+package pt.ulisboa.tecnico.hdsledger.service;
 
 import java.io.Serializable;
 

@@ -1,4 +1,6 @@
-# Always Remember Rito Theory
+# HDSLedger
+
+## Always Remember Rito Theory
 
 Maven Lifecycle has 8-stages
 
@@ -13,7 +15,28 @@ Maven Lifecycle has 8-stages
 | Installation        | 😏          |
 | Deployment          | mvn deploy  |
 
-# To run this outside of Intellij
+## Maven
+### Instalation
+Compile and install all modules
+```
+mvn clean install
+```
+### Execution
+Run without arguments
+```
+cd <module>/
+mvn compile exec:java
+```
+or with arguments
+```
+cd <module>/
+mvn compile exec:java -Dexec.args="..."
+```
+
+## To run this outside of Intellij (outdated)
 ```
 java -classpath target/classes blockchain.Node
 ```
+
+## Built With
+* [Maven](https://maven.apache.org/) - Build and dependency management tool;

@@ -1,4 +1,5 @@
-package utils;
+package pt.ulisboa.tecnico.hdsledger.utilities;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.net.InetAddress;
@@ -13,9 +14,10 @@ public class ConfigParser {
     private int nodeId;
     private String path;
 
-    public ConfigParser(int nodeId, String path) {
+    public ConfigParser(int nodeId) {
         this.nodeId = nodeId;
-        this.path = path;
+        System.out.println(new File(".").getAbsolutePath());
+        this.path = "src/main/resources/config.txt";
     }
     
     public HashMap<Integer, Entry<InetAddress, Integer>> parse() throws FileNotFoundException, UnknownHostException {
