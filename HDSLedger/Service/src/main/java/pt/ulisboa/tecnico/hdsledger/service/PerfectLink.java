@@ -7,10 +7,14 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.net.DatagramSocket;
 import java.net.DatagramPacket;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.io.IOException;
 
 public class PerfectLink {
@@ -24,7 +28,9 @@ public class PerfectLink {
     // Set of received ACKs
     private Set<Integer> receivedAcks = ConcurrentHashMap.newKeySet();
     // Time to wait for an ACK before resending the message
-    static final private int ACK_WAIT_TIME = 1000;
+    static final private int ACK_WAIT_TIME = 20000;
+
+    private static final Logger LOGGER = Logger.getLogger(PerfectLink.class.getName());
 
     public PerfectLink(String address, int port, int nodeId, HashMap<Integer, Entry<InetAddress, Integer>> nodes)
             throws UnknownHostException, SocketException {
@@ -38,7 +44,7 @@ public class PerfectLink {
      * 
      * @param data The message to be broadcasted
      */
-    public void broadcast(Data data) {
+    public void broadcast(Message data) {
 
         nodes.values().forEach((node) -> {
             try {
@@ -58,7 +64,7 @@ public class PerfectLink {
      * 
      * @param data The message to be sent
      */
-    public void send(InetAddress address, int port, Data data) throws IOException, InterruptedException {
+    public void send(InetAddress address, int port, Message data) throws IOException, InterruptedException {
         // Spawn a new thread to send the message
         // To avoid blocking while waiting for ACK
         new Thread(() -> {
@@ -71,11 +77,11 @@ public class PerfectLink {
                 // If the message is not ACK, within 1 second it will be resent
                 int count = 0;
                 while (!receivedAcks.contains(messageId)) {
-                    System.out.println("Sending message for the " + ++count + " time");
+                    LOGGER.log(Level.INFO, "Sending message for the " + ++count + " time");
                     socket.send(packet);
                     Thread.sleep(ACK_WAIT_TIME);
                 }
-
+                LOGGER.log(Level.INFO, "Message sent successfully");
                 receivedAcks.remove(messageId);
 
             } catch (IOException | InterruptedException e) {
@@ -95,7 +101,7 @@ public class PerfectLink {
      * 
      * @param data The message to be sent
      */
-    public void unreliableSend(InetAddress address, int port, Data data) throws IOException {
+    public void unreliableSend(InetAddress address, int port, Message data) throws IOException {
         byte[] buf = Serializer.serialize(data);
         DatagramPacket packet = new DatagramPacket(buf, buf.length, address, port);
         socket.send(packet);
@@ -104,7 +110,7 @@ public class PerfectLink {
     /*
      * Receives a message from any node in the network
      */
-    public Data receive() throws IOException, ClassNotFoundException {
+    public Message receive() throws IOException, ClassNotFoundException {
         byte[] buf = new byte[256];
         DatagramPacket packet = new DatagramPacket(buf, buf.length);
 
@@ -112,21 +118,23 @@ public class PerfectLink {
         byte[] mockByteArr = new byte[packet.getLength()];
 
         System.arraycopy(packet.getData(), packet.getOffset(), mockByteArr, 0, packet.getLength());
-        Data data = Serializer.deserialize(mockByteArr, Data.class);
+        Message message = Serializer.deserialize(mockByteArr, Message.class);
 
         // TODO: If already received message, discard it
 
-        if (data.getName().equals("ACK")) {
-            receivedAcks.add(data.getMessageId());
+        if (message.getType().equals("ACK")) {
+            receivedAcks.add(message.getMessageId());
         } else {
             // ACK is sent without needing for another ACK because
             // we're assuming an eventually synchronous network
             // Even if a node receives the message multiple times,
             // it will discard duplicates
-            unreliableSend(packet.getAddress(), packet.getPort(), new Data(nodeId, 0, "ACK", data.getMessageId()));
+            List<String> messageArgs = new ArrayList<>();
+            messageArgs.add("Bom dia");
+            unreliableSend(packet.getAddress(), packet.getPort(), new Message(nodeId, 0, Message.Type.ACK, messageArgs));
         }
 
-        return data;
+        return message;
     }
 
 }

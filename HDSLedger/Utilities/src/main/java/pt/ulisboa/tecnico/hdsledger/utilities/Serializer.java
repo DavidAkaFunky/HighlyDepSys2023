@@ -16,6 +16,7 @@ public class Serializer {
         ByteArrayInputStream bais = new ByteArrayInputStream(b);
         ObjectInputStream ois = new ObjectInputStream(bais);
         Object o = ois.readObject();
+        ois.close();
         return cl.cast(o);
     }
 }

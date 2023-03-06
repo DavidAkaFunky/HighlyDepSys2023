@@ -4,7 +4,9 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ConfigParser;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,12 +35,15 @@ public class Node {
 
             if (isLeader) {
                 LOGGER.log(Level.INFO, "{0} - Broadcasting message", id);
-                link.broadcast(new Data(id, 0, "Days without UDP losing messages: 5", 2));
+                List<String> messageArgs = new ArrayList<>();
+                messageArgs.add("Hello");
+                messageArgs.add("World");
+                link.broadcast(new Message(id, 0, Message.Type.PRE_PREPARE, messageArgs));
             }
 
             while (true) {
                 try {
-                    Data data = link.receive();
+                    Message data = link.receive();
                     System.out.println(data);
                 } catch (ClassNotFoundException | IOException e) {
                     e.printStackTrace();
