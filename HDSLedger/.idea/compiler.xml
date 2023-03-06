@@ -6,8 +6,14 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="HDSLedger" />
+        <module name="Service" />
+        <module name="Utilities" />
+        <module name="Library" />
+        <module name="Client" />
       </profile>
     </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="Classes" target="1.5" />
+    </bytecodeTargetLevel>
   </component>
 </project>
