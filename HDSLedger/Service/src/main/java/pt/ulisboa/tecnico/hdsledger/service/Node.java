@@ -44,7 +44,9 @@ public class Node {
             while (true) {
                 try {
                     Message data = link.receive();
-                    System.out.println(data);
+                    if (data != null){
+                        System.out.println(data);
+                    }
                 } catch (ClassNotFoundException | IOException e) {
                     e.printStackTrace();
                 }
