@@ -111,7 +111,7 @@ public class PerfectLink {
      * Receives a message from any node in the network
      */
     public Message receive() throws IOException, ClassNotFoundException {
-        byte[] buf = new byte[256];
+        byte[] buf = new byte[512];
         DatagramPacket packet = new DatagramPacket(buf, buf.length);
 
         socket.receive(packet);
@@ -122,7 +122,7 @@ public class PerfectLink {
 
         // TODO: If already received message, discard it
 
-        if (message.getType().equals("ACK")) {
+        if (message.getType().equals(Message.Type.ACK)) {
             receivedAcks.add(message.getMessageId());
         } else {
             // ACK is sent without needing for another ACK because
