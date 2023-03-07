@@ -24,7 +24,8 @@ public class Node {
             String hostname = args[2];
             int port = Integer.parseInt(args[3]);
 
-            LOGGER.log(Level.INFO, "{0} - Node {0} at {1}:{2} is leader: {3}", new Object[] { id, hostname, port, isLeader });
+            LOGGER.log(Level.INFO, "{0} - Node {0} at {1}:{2} is leader: {3}",
+                    new Object[] { id, hostname, port, isLeader });
 
             // Parse config file to know where all nodes are
             ConfigParser parser = new ConfigParser(id);
@@ -32,6 +33,9 @@ public class Node {
 
             // Abstraction to send and receive messages
             PerfectLink link = new PerfectLink(hostname, port, id, nodes);
+
+            // Service implementation
+            NodeService service = new NodeService(id, isLeader, link);
 
             if (isLeader) {
                 LOGGER.log(Level.INFO, "{0} - Broadcasting message", id);
@@ -43,10 +47,61 @@ public class Node {
 
             while (true) {
                 try {
-                    Message data = link.receive();
-                    if (data != null){
-                        System.out.println(data);
-                    }
+                    Message message = link.receive();
+
+                    // Separate thread to handle each message
+                    new Thread(() -> {
+                        switch (message.getType()) {
+                            case PRE_PREPARE -> {
+                                LOGGER.log(Level.INFO, "{0} - Received PRE-PREPARE message from {1}",
+                                        new Object[] { id, message.getSenderId() });
+                                // service.uponPrePrepare(message);
+                            }
+
+                            case PREPARE -> {
+                                LOGGER.log(Level.INFO, "{0} - Received PREPARE message from {1}",
+                                        new Object[] { id, message.getSenderId() });
+                                // service.uponPrepare(message);
+                            }
+
+                            case COMMIT -> {
+                                LOGGER.log(Level.INFO, "{0} - Received COMMIT message from {1}",
+                                        new Object[] { id, message.getSenderId() });
+                                // service.uponCommit(message);
+                            }
+
+                            case ROUND_CHANGE -> {
+                                LOGGER.log(Level.INFO, "{0} - Received ROUND-CHANGE message from {1}",
+                                        new Object[] { id, message.getSenderId() });
+                                // stage 2
+                            }
+
+                            case DECIDE -> {
+                                LOGGER.log(Level.INFO, "{0} - Received DECIDE message from {1}",
+                                        new Object[] { id, message.getSenderId() });
+                                // TODO: send message to library/client
+                            }
+
+                            case ACK -> {
+                                LOGGER.log(Level.INFO, "{0} - Received ACK message from {1}",
+                                        new Object[] { id, message.getSenderId() });
+                                // ....
+                            }
+
+                            case DUPLICATE -> {
+                                LOGGER.log(Level.INFO, "{0} - Received DUPLICATE message from {1}",
+                                        new Object[] { id, message.getSenderId() });
+                                // ignore
+                            }
+
+                            default -> {
+                                LOGGER.log(Level.INFO, "{0} - Received unknown message from {1}",
+                                        new Object[] { id, message.getSenderId() });
+                                // ignore
+                            }
+                        }
+                    }).start();
+
                 } catch (ClassNotFoundException | IOException e) {
                     e.printStackTrace();
                 }

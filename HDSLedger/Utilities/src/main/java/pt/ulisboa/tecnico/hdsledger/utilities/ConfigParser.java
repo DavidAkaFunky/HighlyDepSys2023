@@ -16,7 +16,6 @@ public class ConfigParser {
 
     public ConfigParser(int nodeId) {
         this.nodeId = nodeId;
-        System.out.println(new File(".").getAbsolutePath());
         this.path = "src/main/resources/config.txt";
     }
     
