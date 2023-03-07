@@ -35,7 +35,7 @@ public class Node {
             PerfectLink link = new PerfectLink(hostname, port, id, nodes);
 
             // Service implementation
-            NodeService service = new NodeService(id, isLeader, link);
+            NodeService service = new NodeService(id, isLeader, link, nodes.size());
 
             if (isLeader) {
                 LOGGER.log(Level.INFO, "{0} - Broadcasting message", id);

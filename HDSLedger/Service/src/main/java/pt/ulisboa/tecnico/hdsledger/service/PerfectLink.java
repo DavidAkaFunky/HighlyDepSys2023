@@ -52,7 +52,6 @@ public class PerfectLink {
      * @param data The message to be broadcasted
      */
     public void broadcast(Message data) {
-
         nodes.entrySet().forEach(entry -> {
             try {
                 send(entry.getKey(), entry.getValue().getKey(), entry.getValue().getValue(), data);
