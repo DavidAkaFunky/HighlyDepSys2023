@@ -3,6 +3,7 @@ package pt.ulisboa.tecnico.hdsledger.service;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -11,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class NodeService {
 
-    private final Queue<Block> blockchain = new ConcurrentLinkedQueue<>();
+    private final Queue<String> blockchain = new ConcurrentLinkedQueue<>();
 
     // hmm....
     private boolean isLeader;
@@ -43,11 +44,11 @@ public class NodeService {
         this.commitMessages = new MessageBucket(nodeCount);
     }
 
-    public void addBlock(Block block) {
+    public void addBlock(String block) {
         blockchain.add(block);
     }
 
-    public Queue<Block> getBlockchain() {
+    public Queue<String> getBlockchain() {
         return blockchain;
     }
 
@@ -65,8 +66,9 @@ public class NodeService {
             return; // Already started consensus for this instance
         }
 
+        String inputValue = message.getArgs().get(1);
         this.consensusInstance = consensusInstance;
-        this.instanceInfo.put(this.consensusInstance, new InstanceInfo(message.getArgs().get(1)));
+        this.instanceInfo.put(this.consensusInstance, new InstanceInfo(inputValue));
 
         // Leader broadcasts PRE-PREPARE message
         if (isLeader) {
@@ -114,10 +116,15 @@ public class NodeService {
          * 0,
          * TIMER_PERIOD);
          */
+        int consensusInstance = Integer.parseInt(message.getArgs().get(0));
+        int round = Integer.parseInt(message.getArgs().get(1));
+        String value = message.getArgs().get(2);
 
-        Message prepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PREPARE, message.getArgs());
-
-        this.link.broadcast(prepareMessage);
+        if (justifyPrePrepare(consensusInstance, round, value)){
+            Message prepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PREPARE, message.getArgs());
+            this.link.broadcast(prepareMessage);
+        }
+        
     }
 
     /*
@@ -129,22 +136,28 @@ public class NodeService {
         int round = Integer.parseInt(message.getArgs().get(1));
         String value = message.getArgs().get(2);
 
-        // TODO: Remove x -> true and add check for value
-        if (prepareMessages.quorum(consensusInstance, round, (x -> true))) {
+        prepareMessages.addMessage(consensusInstance, round, value);
+
+        // Find value with valid quorum
+        Optional<String> preparedValue = prepareMessages.hasValidQuorum(consensusInstance, round);
+        if (preparedValue.isPresent()) {
+
+            // Set instance values
+            this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
             InstanceInfo instance = this.instanceInfo.get(consensusInstance);
             instance.setPreparedRound(round);
-            instance.setPreparedValue(value);
+            instance.setPreparedValue(preparedValue.get());
 
+            // Prepare message to broadcast
             List<String> messageArgs = new ArrayList<>();
             messageArgs.add(String.valueOf(this.consensusInstance));
             messageArgs.add(String.valueOf(instance.getCurrentRound()));
             messageArgs.add(instance.getPreparedValue());
 
-            Message prePrepareMessage = new Message(nodeId, this.messageCount++, Message.Type.COMMIT, messageArgs);
+            Message commitMessage = new Message(nodeId, this.messageCount++, Message.Type.COMMIT, messageArgs);
 
-            this.link.broadcast(prePrepareMessage);
+            this.link.broadcast(commitMessage);
         }
-
     }
 
     /*
@@ -156,25 +169,23 @@ public class NodeService {
         int round = Integer.parseInt(message.getArgs().get(1));
         String value = message.getArgs().get(2);
 
-        // TODO: Remove x -> true and add check for value
-        if (commitMessages.quorum(consensusInstance, round, (x -> true))){
+        commitMessages.addMessage(consensusInstance, round, value);
+
+        Optional<String> preparedValue = commitMessages.hasValidQuorum(consensusInstance, round);
+        if (preparedValue.isPresent()) {
             // this.timer.cancel(); // Not needed for now
             // this.consensusInstance and this.preparedValue will always be the same as the ones in the message
             // Decide(this.consensusInstance, this.preparedValue, Quorum (why?) )
-        }
 
+            // Add block to blockchain 
+            while(blockchain.size() < consensusInstance) {
+                this.addBlock(preparedValue.get());
+            }
+            
+        }
     }
 
-    private boolean justifyPrePrepare(Message message) {
-        // Unnecessary check but just in case
-        if (message.getType() != Message.Type.PRE_PREPARE)
-            return false;
-
-        List<String> messageArgs = message.getArgs();
-        int consensusInstance = Integer.parseInt(messageArgs.get(0));
-        int round = Integer.parseInt(messageArgs.get(0));
-        String value = messageArgs.get(2);
-
+    private boolean justifyPrePrepare(int consensusInstance, int round, String value) {
         // TODO: There is no round change, so this is a primitive version of the check
         return round == 1;
     }

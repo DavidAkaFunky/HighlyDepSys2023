@@ -11,13 +11,9 @@ import java.util.Map.Entry;
 
 public class ConfigParser {
 
-    private int nodeId;
-    private String path;
+    private String path = "src/main/resources/config.txt";
 
-    public ConfigParser(int nodeId) {
-        this.nodeId = nodeId;
-        this.path = "src/main/resources/config.txt";
-    }
+    public ConfigParser() {}
     
     public HashMap<Integer, Entry<InetAddress, Integer>> parse() throws FileNotFoundException, UnknownHostException {
         HashMap<Integer, Entry<InetAddress, Integer>> nodes
@@ -29,9 +25,6 @@ public class ConfigParser {
             String line = scanner.nextLine();
             String[] splitLine = line.split(" ");
             int id = Integer.parseInt(splitLine[0]);
-            if (id == nodeId) {
-                continue;
-            }
             String hostname = splitLine[2];
             int port = Integer.parseInt(splitLine[3]);
             nodes.put(id, Map.entry(InetAddress.getByName(hostname), port));

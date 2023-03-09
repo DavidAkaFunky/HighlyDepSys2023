@@ -10,6 +10,14 @@ approximate the behavior of Fair Loss Links, thus allowing you to build (a
 subset of) the abstractions we learned in class
 ```
 
+# Linearazability 
+Operations should be linearizable. Meaning that if two operations are concurrent
+then there are multiple possible orderings of the operations that are consistent.
+However non-concurrent operations should be ordered.
+
+Doesnt need read your writes IF client doesnt wait for a response of the server
+in each operation
+
 # What's being communicated
 
 A string to be appended.  

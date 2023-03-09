@@ -39,6 +39,10 @@ public class Message implements Serializable {
         return type;
     }
 
+    public void setType(Type type) {
+        this.type = type;
+    }
+
     public List<String> getArgs() {
         return args;
     }

@@ -28,7 +28,7 @@ public class Node {
                     new Object[] { id, hostname, port, isLeader });
 
             // Parse config file to know where all nodes are
-            ConfigParser parser = new ConfigParser(id);
+            ConfigParser parser = new ConfigParser();
             HashMap<Integer, Entry<InetAddress, Integer>> nodes = parser.parse();
 
             // Abstraction to send and receive messages
@@ -55,31 +55,25 @@ public class Node {
                             case PRE_PREPARE -> {
                                 LOGGER.log(Level.INFO, "{0} - Received PRE-PREPARE message from {1}",
                                         new Object[] { id, message.getSenderId() });
-                                // service.uponPrePrepare(message);
+                                service.uponPrePrepare(message);
                             }
 
                             case PREPARE -> {
                                 LOGGER.log(Level.INFO, "{0} - Received PREPARE message from {1}",
                                         new Object[] { id, message.getSenderId() });
-                                // service.uponPrepare(message);
+                                service.uponPrepare(message);
                             }
 
                             case COMMIT -> {
                                 LOGGER.log(Level.INFO, "{0} - Received COMMIT message from {1}",
                                         new Object[] { id, message.getSenderId() });
-                                // service.uponCommit(message);
+                                service.uponCommit(message);
                             }
 
                             case ROUND_CHANGE -> {
                                 LOGGER.log(Level.INFO, "{0} - Received ROUND-CHANGE message from {1}",
                                         new Object[] { id, message.getSenderId() });
                                 // stage 2
-                            }
-
-                            case DECIDE -> {
-                                LOGGER.log(Level.INFO, "{0} - Received DECIDE message from {1}",
-                                        new Object[] { id, message.getSenderId() });
-                                // TODO: send message to library/client
                             }
 
                             case ACK -> {

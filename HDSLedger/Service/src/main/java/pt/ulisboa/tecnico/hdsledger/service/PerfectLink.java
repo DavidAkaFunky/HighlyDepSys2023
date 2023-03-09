@@ -132,26 +132,25 @@ public class PerfectLink {
         System.arraycopy(packet.getData(), packet.getOffset(), mockByteArr, 0, packet.getLength());
         Message message = Serializer.deserialize(mockByteArr, Message.class);
 
-        // Message already received (add returns false if already exists) => Discard
-        if (!receivedMessages.get(message.getSenderId()).add(message.getMessageId())) {
-            return new Message(message.getSenderId(), message.getMessageId(), Type.DUPLICATE);
-        }
-
         if (message.getType().equals(Message.Type.ACK)) {
             // If the message is an ACK, add it to the set of received ACKs
             receivedAcks.get(message.getSenderId()).add(message.getMessageId());
-            return new Message(message.getSenderId(), message.getMessageId(), Type.ACK);
-        } else {
-            // ACK is sent without needing for another ACK because
-            // we're assuming an eventually synchronous network
-            // Even if a node receives the message multiple times,
-            // it will discard duplicates
-            List<String> messageArgs = new ArrayList<>();
-            messageArgs.add("Bom dia");
-            unreliableSend(packet.getAddress(), packet.getPort(),
-                    new Message(nodeId, 0, Message.Type.ACK, messageArgs));
             return message;
         }
+
+        // Message already received (add returns false if already exists) => Discard
+        if (!receivedMessages.get(message.getSenderId()).add(message.getMessageId())) {
+            message.setType(Type.DUPLICATE);
+        }
+        
+        // ACK is sent without needing for another ACK because
+        // we're assuming an eventually synchronous network
+        // Even if a node receives the message multiple times,
+        // it will discard duplicates
+        unreliableSend(packet.getAddress(), packet.getPort(),
+                       new Message(nodeId, 0, Message.Type.ACK, new ArrayList<>()));
+
+        return message;
     }
 
 }
