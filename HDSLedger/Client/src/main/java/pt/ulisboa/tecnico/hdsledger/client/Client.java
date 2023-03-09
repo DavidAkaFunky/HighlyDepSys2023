@@ -18,15 +18,26 @@ public class Client {
                 continue;
             }
 
-            switch (line) {
+            String[] tokens = line.split(" ");
+
+            switch (tokens[0]) {
+                case "write" -> {
+                    if(tokens.length > 1){
+                        System.out.println("Writing to blockchain...");
+                        System.out.println(tokens[1]);
+                    }
+                }
+                case "read" -> {
+                    System.out.println("Reading blockchain...");
+                }
                 case "exit" -> {
                     System.out.println("Exiting...");
                     scanner.close();
                     System.exit(0);
                 }
                 default -> {
+                    System.out.println("Unrecognized command.");
                     System.out.println(line);
-                    break;
                 }    
             }
         }

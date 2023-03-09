@@ -4,9 +4,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ConfigParser;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map.Entry;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -37,14 +35,6 @@ public class Node {
             // Service implementation
             NodeService service = new NodeService(id, isLeader, link, nodes.size());
 
-            if (isLeader) {
-                LOGGER.log(Level.INFO, "{0} - Broadcasting message", id);
-                List<String> messageArgs = new ArrayList<>();
-                messageArgs.add("Hello");
-                messageArgs.add("World");
-                link.broadcast(new Message(id, 0, Message.Type.PRE_PREPARE, messageArgs));
-            }
-
             while (true) {
                 try {
                     Message message = link.receive();
@@ -52,6 +42,11 @@ public class Node {
                     // Separate thread to handle each message
                     new Thread(() -> {
                         switch (message.getType()) {
+                            case START -> {
+                                LOGGER.log(Level.INFO, "{0} - Received START message from {1}",
+                                        new Object[] { id, message.getSenderId() });
+                                service.startConsensus(message);
+                            }
                             case PRE_PREPARE -> {
                                 LOGGER.log(Level.INFO, "{0} - Received PRE-PREPARE message from {1}",
                                         new Object[] { id, message.getSenderId() });

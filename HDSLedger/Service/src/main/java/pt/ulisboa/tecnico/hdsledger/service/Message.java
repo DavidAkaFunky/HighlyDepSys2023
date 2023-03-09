@@ -11,7 +11,7 @@ public class Message implements Serializable {
     private List<String> args;
 
     enum Type {
-        PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE, DECIDE, ACK, DUPLICATE,
+        START, PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE, DECIDE, ACK, DUPLICATE,
     }
 
     public Message(int senderId, int messageId, Type type) {

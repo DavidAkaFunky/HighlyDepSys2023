@@ -12,9 +12,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class NodeService {
 
+    // Store strings
     private final Queue<String> blockchain = new ConcurrentLinkedQueue<>();
 
-    // hmm....
     private boolean isLeader;
     // TODO: Devia ser o PerfectLink a meter o counter na message ?
     // Probably um construtor para a mensagem sem o counter e depois é feito set
