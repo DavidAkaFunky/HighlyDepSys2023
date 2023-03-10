@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
+import pt.ulisboa.tecnico.hdsledger.library.Library;
 import java.util.Scanner;
 
 public class Client {
@@ -22,13 +23,16 @@ public class Client {
 
             switch (tokens[0]) {
                 case "write" -> {
-                    if(tokens.length > 1){
+                    if (tokens.length == 1){
                         System.out.println("Writing to blockchain...");
                         System.out.println(tokens[1]);
+                    } else {
+                        System.err.println("Wrong number of arguments (1 required).");
                     }
                 }
                 case "read" -> {
                     System.out.println("Reading blockchain...");
+                    
                 }
                 case "exit" -> {
                     System.out.println("Exiting...");
@@ -36,8 +40,7 @@ public class Client {
                     System.exit(0);
                 }
                 default -> {
-                    System.out.println("Unrecognized command.");
-                    System.out.println(line);
+                    System.err.println("Unrecognized command:" + line);
                 }    
             }
         }

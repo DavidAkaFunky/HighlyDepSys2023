@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.service;
+package pt.ulisboa.tecnico.hdsledger.communication;
 
 import java.io.Serializable;
 import java.util.List;
@@ -10,7 +10,7 @@ public class Message implements Serializable {
     private Type type;
     private List<String> args;
 
-    enum Type {
+    public enum Type {
         START, PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE, DECIDE, ACK, IGNORE;
     }
 

@@ -3,9 +3,16 @@ package pt.ulisboa.tecnico.hdsledger.utilities;
 public class NodeConfig {
     private boolean isLeader = false;
     private String hostname = "localhost";
-
     private String id = "id";
     private int port = 0;
+
+    public NodeConfig() {}
+
+    public NodeConfig(String id, String hostname, int port) {
+        this.id = id;
+        this.hostname = hostname;
+        this.port = port;
+    }
 
     public boolean isLeader() {
         return isLeader;

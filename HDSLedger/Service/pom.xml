@@ -13,7 +13,6 @@
 
     <properties>
         <mainClass>pt.ulisboa.tecnico.hdsledger.service.Node</mainClass>
-
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.source>17</maven.compiler.source>
@@ -23,6 +22,11 @@
         <dependency>
             <groupId>${project.groupId}</groupId>
             <artifactId>Utilities</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>${project.groupId}</groupId>
+            <artifactId>Communication</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
     </dependencies>

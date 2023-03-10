@@ -13,15 +13,7 @@
         <module>Library</module>
         <module>Service</module>
         <module>Utilities</module>
+        <module>Communication</module>
     </modules>
-    <dependencies>
-        <!--  Gson: Java to JSON conversion -->
-        <dependency>
-          <groupId>com.google.code.gson</groupId>
-          <artifactId>gson</artifactId>
-          <version>2.10.1</version>
-          <scope>compile</scope>
-        </dependency>
-    </dependencies>
 
 </project>

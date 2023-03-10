@@ -4,6 +4,8 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfigBuilder;
+import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
+import pt.ulisboa.tecnico.hdsledger.communication.Message;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -22,8 +24,9 @@ public class Node {
             // Single command line argument (id)
             String id = args[0];
 
-            // Parse config file to know where all nodes are
+            // TODO: Distinguish by server/client
             NodeConfig[] nodes = new NodeConfigBuilder().fromFile(CONFIG);
+            // TODO: change this
             Optional<NodeConfig> config = Arrays.stream(nodes).filter(nodeConfig -> nodeConfig.getId().equals(id)).findAny();
 
             if (config.isEmpty()) throw new LedgerException(ErrorMessage.ConfigFileFormat);
@@ -50,6 +53,7 @@ public class Node {
                                         new Object[]{id, message.getSenderId()});
                                 service.startConsensus(message);
                             }
+                            
                             case PRE_PREPARE -> {
                                 LOGGER.log(Level.INFO, "{0} - Received PRE-PREPARE message from {1}",
                                         new Object[]{id, message.getSenderId()});
@@ -66,6 +70,7 @@ public class Node {
                                 LOGGER.log(Level.INFO, "{0} - Received COMMIT message from {1}",
                                         new Object[]{id, message.getSenderId()});
                                 service.uponCommit(message);
+
                             }
 
                             case ROUND_CHANGE -> {
@@ -77,7 +82,7 @@ public class Node {
                             case ACK -> {
                                 LOGGER.log(Level.INFO, "{0} - Received ACK message from {1}",
                                         new Object[]{id, message.getSenderId()});
-                                // ....
+                                // ignore
                             }
 
                             case IGNORE -> {
@@ -102,5 +107,13 @@ public class Node {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+    
+    public static void listenToClients(PerfectLink link){
+
+    }
+
+    public static void listenToNodes(PerfectLink link){
+
     }
 }
