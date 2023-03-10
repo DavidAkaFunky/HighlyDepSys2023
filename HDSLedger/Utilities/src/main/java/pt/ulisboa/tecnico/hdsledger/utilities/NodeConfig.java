@@ -1,14 +1,14 @@
 package pt.ulisboa.tecnico.hdsledger.utilities;
 
 public class NodeConfig {
-    private boolean _isLeader = false;
+    private boolean isLeader = false;
     private String hostname = "localhost";
 
     private String id = "id";
     private int port = 0;
 
     public boolean isLeader() {
-        return _isLeader;
+        return isLeader;
     }
 
     public int getPort() {
@@ -36,6 +36,6 @@ public class NodeConfig {
     }
 
     protected void setLeader(boolean leader) {
-        _isLeader = leader;
+        this.isLeader = leader;
     }
 }

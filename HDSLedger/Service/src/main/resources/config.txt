@@ -1,3 +1,3 @@
-1 L localhost 3000
-2 S localhost 3001
-3 S localhost 3002
+[{"id": "1", "isLeader": true, "hostname": "localhost", "port": 3000},
+{"id": "2", "isLeader": false, "hostname": "localhost", "port": 3001},
+{"id": "3", "isLeader": false, "hostname": "localhost", "port": 3002}]

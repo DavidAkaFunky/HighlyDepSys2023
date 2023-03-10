@@ -14,7 +14,7 @@ import java.util.logging.Logger;
 public class Node {
 
     private static final Logger LOGGER = Logger.getLogger(Node.class.getName());
-    private static final String CONFIG = "Service/src/main/resources/config.txt";
+    private static final String CONFIG = "src/main/resources/config.txt";
 
     public static void main(String[] args) {
 
