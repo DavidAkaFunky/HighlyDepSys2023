@@ -1,39 +1,42 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
-import pt.ulisboa.tecnico.hdsledger.utilities.ConfigParser;
+import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
+import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfigBuilder;
 
 import java.io.IOException;
-import java.net.InetAddress;
-import java.util.HashMap;
-import java.util.Map.Entry;
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class Node {
 
     private static final Logger LOGGER = Logger.getLogger(Node.class.getName());
+    private static final String CONFIG = "Service/src/main/resources/config.txt";
 
     public static void main(String[] args) {
 
         try {
-            // Command line arguments (e.g. 1 L localhost 3000)
-            int id = Integer.parseInt(args[0]);
-            boolean isLeader = args[1].equals("L");
-            String hostname = args[2];
-            int port = Integer.parseInt(args[3]);
-
-            LOGGER.log(Level.INFO, "{0} - Node {0} at {1}:{2} is leader: {3}",
-                    new Object[] { id, hostname, port, isLeader });
+            // Single command line argument (id)
+            String id = args[0];
 
             // Parse config file to know where all nodes are
-            ConfigParser parser = new ConfigParser();
-            HashMap<Integer, Entry<InetAddress, Integer>> nodes = parser.parse();
+            NodeConfig[] nodes = new NodeConfigBuilder().fromFile(CONFIG);
+            Optional<NodeConfig> config = Arrays.stream(nodes).filter(nodeConfig -> nodeConfig.getId().equals(id)).findAny();
+
+            if (config.isEmpty()) throw new LedgerException(ErrorMessage.ConfigFileFormat);
+
+            var nodeConfig = config.get();
+            LOGGER.log(Level.INFO, "{0} - Node {0} at {1}:{2} is leader: {3}",
+                    new Object[]{nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort(), nodeConfig.isLeader()});
 
             // Abstraction to send and receive messages
-            PerfectLink link = new PerfectLink(hostname, port, id, nodes);
+            PerfectLink link = new PerfectLink(nodeConfig, nodes);
 
             // Service implementation
-            NodeService service = new NodeService(id, isLeader, link, nodes.size());
+            NodeService service = new NodeService(id, nodeConfig.isLeader(), link, nodes.length);
 
             while (true) {
                 try {
@@ -44,48 +47,48 @@ public class Node {
                         switch (message.getType()) {
                             case START -> {
                                 LOGGER.log(Level.INFO, "{0} - Received START message from {1}",
-                                        new Object[] { id, message.getSenderId() });
+                                        new Object[]{id, message.getSenderId()});
                                 service.startConsensus(message);
                             }
                             case PRE_PREPARE -> {
                                 LOGGER.log(Level.INFO, "{0} - Received PRE-PREPARE message from {1}",
-                                        new Object[] { id, message.getSenderId() });
+                                        new Object[]{id, message.getSenderId()});
                                 service.uponPrePrepare(message);
                             }
 
                             case PREPARE -> {
                                 LOGGER.log(Level.INFO, "{0} - Received PREPARE message from {1}",
-                                        new Object[] { id, message.getSenderId() });
+                                        new Object[]{id, message.getSenderId()});
                                 service.uponPrepare(message);
                             }
 
                             case COMMIT -> {
                                 LOGGER.log(Level.INFO, "{0} - Received COMMIT message from {1}",
-                                        new Object[] { id, message.getSenderId() });
+                                        new Object[]{id, message.getSenderId()});
                                 service.uponCommit(message);
                             }
 
                             case ROUND_CHANGE -> {
                                 LOGGER.log(Level.INFO, "{0} - Received ROUND-CHANGE message from {1}",
-                                        new Object[] { id, message.getSenderId() });
+                                        new Object[]{id, message.getSenderId()});
                                 // stage 2
                             }
 
                             case ACK -> {
                                 LOGGER.log(Level.INFO, "{0} - Received ACK message from {1}",
-                                        new Object[] { id, message.getSenderId() });
+                                        new Object[]{id, message.getSenderId()});
                                 // ....
                             }
 
-                            case DUPLICATE -> {
-                                LOGGER.log(Level.INFO, "{0} - Received DUPLICATE message from {1}",
-                                        new Object[] { id, message.getSenderId() });
+                            case IGNORE -> {
+                                LOGGER.log(Level.INFO, "{0} - Received IGNORE message from {1}",
+                                        new Object[]{id, message.getSenderId()});
                                 // ignore
                             }
 
                             default -> {
                                 LOGGER.log(Level.INFO, "{0} - Received unknown message from {1}",
-                                        new Object[] { id, message.getSenderId() });
+                                        new Object[]{id, message.getSenderId()});
                                 // ignore
                             }
                         }

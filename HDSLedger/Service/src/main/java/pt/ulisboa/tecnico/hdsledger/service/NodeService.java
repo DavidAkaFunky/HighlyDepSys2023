@@ -20,7 +20,7 @@ public class NodeService {
     // Probably um construtor para a mensagem sem o counter e depois é feito set
     private int messageCount = 0;
 
-    private int nodeId;
+    private String nodeId;
     private int consensusInstance = 0;
     private Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
 
@@ -36,7 +36,7 @@ public class NodeService {
 
     private static final int TIMER_PERIOD = 10000;
 
-    public NodeService(int nodeId, boolean isLeader, PerfectLink link, int nodeCount) {
+    public NodeService(String nodeId, boolean isLeader, PerfectLink link, int nodeCount) {
         this.isLeader = isLeader;
         this.nodeId = nodeId;
         this.link = link;

@@ -1,96 +1,87 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
 import pt.ulisboa.tecnico.hdsledger.service.Message.Type;
+import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
+import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.Serializer;
 
-import java.net.InetAddress;
-import java.net.SocketException;
-import java.net.UnknownHostException;
-import java.net.DatagramSocket;
-import java.net.DatagramPacket;
+import java.io.IOException;
+import java.net.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.io.IOException;
 
 public class PerfectLink {
 
-    // Node identifier
-    private int nodeId;
-    // UDP Socket
-    private DatagramSocket socket;
-    // Map of all nodes in the network
-    private HashMap<Integer, Entry<InetAddress, Integer>> nodes;
-    // Map node -> list of received messages from that node
-    private ConcurrentHashMap<Integer, HashSet<Integer>> receivedMessages = new ConcurrentHashMap<>();
-    // Set of received ACKs
-    private ConcurrentHashMap<Integer, HashSet<Integer>> receivedAcks = new ConcurrentHashMap<>();
     // Time to wait for an ACK before resending the message
-    static final private int ACK_WAIT_TIME = 1000;
-
+    private static final int ACK_WAIT_TIME = 1000;
     private static final Logger LOGGER = Logger.getLogger(PerfectLink.class.getName());
+    // UDP Socket
+    private final DatagramSocket socket;
+    // Map of all nodes in the network
+    private final HashMap<String, NodeConfig> nodes;
+    // Map ID to a unidirectional link, in this case where this node is the sender
+    private final HashMap<String, SimplexLink> senderLinks = new HashMap<>();
+    // Map ID to a unidirectional link, in this case where this node is the receiver
+    private final HashMap<String, SimplexLink> receiverLinks = new HashMap<>();
+    // Reference to the node itself
+    private final NodeConfig node;
 
-    public PerfectLink(String address, int port, int nodeId, HashMap<Integer, Entry<InetAddress, Integer>> nodes)
-            throws UnknownHostException, SocketException {
-        this.nodeId = nodeId;
-        this.socket = new DatagramSocket(port, InetAddress.getByName(address));
-        this.nodes = nodes;
-        nodes.keySet().forEach(id -> {
-            receivedMessages.put(id, new HashSet<>());
-            receivedAcks.put(id, new HashSet<>());
+    public PerfectLink(NodeConfig self, NodeConfig[] nodes) {
+        this.node = self;
+        this.nodes = new HashMap<>();
+        Arrays.stream(nodes).forEach(node -> {
+            this.nodes.put(node.getId(), node);
+            this.senderLinks.put(node.getId(), new SimplexLink(this.node, node));
+            this.receiverLinks.put(node.getId(), new SimplexLink(node, this.node));
         });
+        try {
+            this.socket = new DatagramSocket(node.getPort(), InetAddress.getByName(node.getHostname()));
+        } catch (UnknownHostException | SocketException e) {
+            throw new LedgerException(ErrorMessage.CannotOpenSocket);
+        }
     }
 
     /*
      * Broadcasts a message to all nodes in the network
-     * 
+     *
      * @param data The message to be broadcasted
      */
     public void broadcast(Message data) {
-        nodes.entrySet().forEach(entry -> {
-            try {
-                send(entry.getKey(), entry.getValue().getKey(), entry.getValue().getValue(), data);
-            } catch (IOException | InterruptedException e) {
-                e.printStackTrace();
-            }
-        });
+        nodes.forEach((nodeId, node) -> send(nodeId, data));
     }
 
     /*
      * Sends a message to a specific node with guarantee of delivery
-     * 
+     *
      * @param address The address of the destination node
-     * 
+     *
      * @param port The port of the destination node
-     * 
+     *
      * @param data The message to be sent
      */
-    public void send(int destId, InetAddress address, int port, Message data) throws IOException, InterruptedException {
+    public void send(String destId, Message data) {
         // Spawn a new thread to send the message
         // To avoid blocking while waiting for ACK
         new Thread(() -> {
             try {
-
-                byte[] buf = Serializer.serialize(data);
-                DatagramPacket packet = new DatagramPacket(buf, buf.length, address, port);
+                NodeConfig node = safeGet(destId);
                 int messageId = data.getMessageId();
-
+                SimplexLink link = senderLinks.get(node.getId());
                 // If the message is not ACK, within 1 second it will be resent
-                int count = 0;
-                while (!receivedAcks.get(destId).contains(messageId)) {
-                    LOGGER.log(Level.INFO, "Sending message for the " + ++count + " time");
-                    socket.send(packet);
+                int count = 1;
+                for (; ; ) {
+                    LOGGER.log(Level.INFO, "Sending message for the " + count++ + " time");
+                    unreliableSend(destId, data);
+                    if (link.isPast(messageId)) break;
                     Thread.sleep(ACK_WAIT_TIME);
                 }
+                link.updateAck(messageId);
                 LOGGER.log(Level.INFO, "Message sent successfully");
-                receivedAcks.get(destId).remove(messageId);
-
-            } catch (IOException | InterruptedException e) {
+            } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }).start();
@@ -100,23 +91,30 @@ public class PerfectLink {
      * Sends a message to a specific node without guarantee of delivery
      * Mainly used to send ACKs, if they are lost, the original message will be
      * resent
-     * 
+     *
      * @param address The address of the destination node
-     * 
+     *
      * @param port The port of the destination node
-     * 
+     *
      * @param data The message to be sent
      */
-    public void unreliableSend(InetAddress address, int port, Message data) throws IOException {
+    public void unreliableSend(String nodeId, Message data) {
         new Thread(() -> {
             try {
                 byte[] buf = Serializer.serialize(data);
-                DatagramPacket packet = new DatagramPacket(buf, buf.length, address, port);
+                NodeConfig node = safeGet(nodeId);
+                DatagramPacket packet = new DatagramPacket(buf, buf.length, InetAddress.getByName(node.getHostname()), node.getPort());
                 socket.send(packet);
             } catch (IOException e) {
-                e.printStackTrace();
+                throw new LedgerException(ErrorMessage.SocketSendingError);
             }
         }).start();
+    }
+
+
+    private NodeConfig safeGet(String nodeId) {
+        if (!nodes.containsKey(nodeId)) throw new LedgerException(ErrorMessage.NoSuchNode);
+        return nodes.get(nodeId);
     }
 
     /*
@@ -127,30 +125,63 @@ public class PerfectLink {
         DatagramPacket packet = new DatagramPacket(buf, buf.length);
 
         socket.receive(packet);
-        byte[] mockByteArr = new byte[packet.getLength()];
 
-        System.arraycopy(packet.getData(), packet.getOffset(), mockByteArr, 0, packet.getLength());
-        Message message = Serializer.deserialize(mockByteArr, Message.class);
+        Message message = Serializer.deserialize(packet.getData(), Message.class);
 
+        NodeConfig node = safeGet(message.getSenderId());
+
+
+
+        // ACK -> tratar logo
         if (message.getType().equals(Message.Type.ACK)) {
-            // If the message is an ACK, add it to the set of received ACKs
-            receivedAcks.get(message.getSenderId()).add(message.getMessageId());
+            SimplexLink link = senderLinks.get(node.getId());
+            int lastAck = link.updateAck(message.getMessageId());
+            if (lastAck != (message.getMessageId() + 1)) message.setType(Type.IGNORE);
             return message;
         }
 
-        // Message already received (add returns false if already exists) => Discard
-        if (!receivedMessages.get(message.getSenderId()).add(message.getMessageId())) {
-            message.setType(Type.DUPLICATE);
+        // Normal -> if (nao ha buracos): devolve else: ignora
+        SimplexLink link = receiverLinks.get(node.getId());
+        if (link.isExpected(message.getMessageId())) {
+            // ACK is sent without needing for another ACK because
+            // we're assuming an eventually synchronous network
+            // Even if a node receives the message multiple times,
+            // it will discard duplicates
+            unreliableSend(node.getId(),
+                    new Message(this.node.getId(), link.updateAck(message.getMessageId()), Message.Type.ACK, new ArrayList<>()));
+            return message;
         }
-        
-        // ACK is sent without needing for another ACK because
-        // we're assuming an eventually synchronous network
-        // Even if a node receives the message multiple times,
-        // it will discard duplicates
-        unreliableSend(packet.getAddress(), packet.getPort(),
-                       new Message(nodeId, 0, Message.Type.ACK, new ArrayList<>()));
-
+        message.setType(Type.IGNORE);
         return message;
+    }
+
+    class SimplexLink {
+        private final NodeConfig source;
+        private final NodeConfig destiny;
+
+        private int lastAck = 0;
+
+        public SimplexLink(NodeConfig source, NodeConfig destiny) {
+            this.source = source;
+            this.destiny = destiny;
+        }
+
+        public boolean isExpected(int seq) {
+            return (lastAck + 1) == seq;
+        }
+
+        public boolean isPast(int seq) {
+            synchronized (this) {
+                return lastAck >= seq;
+            }
+        }
+
+        public int updateAck(int seq) {
+            synchronized (this) {
+                if (seq == (lastAck + 1)) lastAck++;
+                return lastAck;
+            }
+        }
     }
 
 }

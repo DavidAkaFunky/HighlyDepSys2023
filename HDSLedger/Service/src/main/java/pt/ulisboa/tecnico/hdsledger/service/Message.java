@@ -5,29 +5,29 @@ import java.util.List;
 
 public class Message implements Serializable {
 
-    private int senderId;
+    private String senderId;
     private int messageId;
     private Type type;
     private List<String> args;
 
     enum Type {
-        START, PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE, DECIDE, ACK, DUPLICATE,
+        START, PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE, DECIDE, ACK, IGNORE;
     }
 
-    public Message(int senderId, int messageId, Type type) {
+    public Message(String senderId, int messageId, Type type) {
         this.senderId = senderId;
         this.messageId = messageId;
         this.type = type;
     }
 
-    public Message(int senderId, int messageId, Type type, List<String> args) {
+    public Message(String senderId, int messageId, Type type, List<String> args) {
         this.senderId = senderId;
         this.messageId = messageId;
         this.type = type;
         this.args = args;
     }
     
-    public int getSenderId() {
+    public String getSenderId() {
         return senderId;
     }
 

@@ -332,3 +332,5 @@ poetry.toml
 # ruff
 .ruff_cache/
 
+# Intellij
+.idea
