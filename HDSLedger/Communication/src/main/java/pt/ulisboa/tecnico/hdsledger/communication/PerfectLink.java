@@ -90,7 +90,7 @@ public class PerfectLink {
                     LOGGER.log(Level.INFO, "Sending message for the " + count++ + " time");
                     unreliableSend(destAddress, destPort, data);
                     // update with 0 as the argument is just a get (update only happens when arg == lastAck + 1)
-                    if (sendLink.updateSeq(0) >= data.getMessageId()) break;
+                    if (sendLink.tryUpdateSeq(0) >= data.getMessageId()) break;
                     Thread.sleep(ACK_WAIT_TIME);
                 }
                 // link.updateAck(messageId);
@@ -142,13 +142,13 @@ public class PerfectLink {
             throw new LedgerException(ErrorMessage.NoSuchNode);
         // ACK -> tratar logo
         if (message.getType().equals(Message.Type.ACK)) {
-            int lastAck = sendLink.updateSeq(message.getMessageId());
+            int lastAck = sendLink.tryUpdateSeq(message.getMessageId());
             if (lastAck != message.getMessageId()) message.setType(Message.Type.IGNORE);
             return message;
         }
 
         // Normal -> if (nao ha buracos): devolve else: ignora
-        if (recLink.updateSeq(message.getMessageId()) == message.getMessageId()){
+        if (recLink.tryUpdateSeq(message.getMessageId()) == message.getMessageId()){
             // ACK is sent without needing for another ACK because
             // we're assuming an eventually synchronous network
             // Even if a node receives the message multiple times,

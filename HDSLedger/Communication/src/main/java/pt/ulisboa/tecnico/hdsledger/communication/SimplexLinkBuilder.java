@@ -1,9 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfigBuilder;
-
-import java.net.InetAddress;
 
 class Pair<U,V> {
     private final U first;
@@ -58,7 +55,7 @@ class SimplexLink {
         }
     }
 
-    public int updateSeq(int seq) {
+    public int tryUpdateSeq(int seq) {
         synchronized (this) {
             return seq == (sequenceNumber + 1) ? unsafeInc() : sequenceNumber;
         }

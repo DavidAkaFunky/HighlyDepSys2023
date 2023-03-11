@@ -38,10 +38,10 @@ public class LedgerService implements UDPService {
     }
 
     @Override
-    public void start() {
+    public void listen() {
         try (DatagramSocket socket = new DatagramSocket(config.getClientPort(), InetAddress.getByName(config.getHostname()))) {
             thread = new Thread(() -> {
-                DatagramPacket packet = new DatagramPacket(new byte[512], 512);
+                DatagramPacket packet = new DatagramPacket(new byte[1024], 1024);
                 try {
                     logger.log(Level.INFO, "Started LedgerService on {0}:{1}",
                             new Object[]{socket.getInetAddress(), socket.getPort()});

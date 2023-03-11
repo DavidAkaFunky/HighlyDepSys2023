@@ -42,7 +42,9 @@ public class Library {
                 socket.send(packet);
                 var response = new DatagramPacket(new byte[1024], 1024);
                 socket.receive(response);
-                return new Gson().fromJson(new String(response.getData()), LedgerMessage.class); //TODO send message and return real response
+                // TODO check this return
+                // TODO add a NONCE to this message to be appended to the blockchain
+                return new Gson().fromJson(new String(response.getData()), LedgerMessage.class);
             } catch (SocketTimeoutException e) {
                 // do nothing, loop
             } catch (IOException e) {
