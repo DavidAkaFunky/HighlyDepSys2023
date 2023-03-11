@@ -5,7 +5,7 @@ import java.util.List;
 
 public class Message implements Serializable {
 
-    private String senderId;
+    private final String senderId;
     private int messageId;
     private Type type;
     private List<String> args;

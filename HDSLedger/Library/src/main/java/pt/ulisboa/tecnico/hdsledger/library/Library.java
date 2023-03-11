@@ -1,88 +1,74 @@
 package pt.ulisboa.tecnico.hdsledger.library;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import pt.ulisboa.tecnico.hdsledger.communication.Message;
-import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
-import pt.ulisboa.tecnico.hdsledger.communication.Message.Type;
+import com.google.gson.Gson;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfigBuilder;
 
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketTimeoutException;
+import java.util.Arrays;
+import java.util.Optional;
+import java.util.logging.Logger;
+
 public class Library {
 
     private static final Logger LOGGER = Logger.getLogger(Library.class.getName());
     private static final String CONFIG = "src/main/resources/config.txt";
-    private NodeConfig[] nodes;
-    private PerfectLink link;
-    private final String id = "4";
-    private int messageId = 1;
-    
+    private final NodeConfig server;
 
-    public Library(){
-        // TODO: Distinguish by server/client
-        NodeConfig[] nodes = new NodeConfigBuilder().fromFile(CONFIG);
-        // TODO: change this
-        Optional<NodeConfig> config = Arrays.stream(nodes).filter(nodeConfig -> nodeConfig.getId().equals(id)).findAny();
-
-        if (config.isEmpty()) throw new LedgerException(ErrorMessage.ConfigFileFormat);
-
-        var nodeConfig = config.get();
-        link = new PerfectLink(nodeConfig, nodes);
+    public Library() {
+        Optional<NodeConfig> server = Arrays.stream(new NodeConfigBuilder().fromFile(CONFIG)).filter(NodeConfig::isLeader).findFirst();
+        if (server.isEmpty()) throw new LedgerException(ErrorMessage.ConfigFileFormat);
+        this.server = server.get();
     }
 
-    public List<String> write(String value) {
-        List<String> args = new ArrayList<>();
-        args.add(value);
-        Message message = new Message(id, messageId++, Type.START, args);
-        link.broadcast(message);
-        return listen();
+    public LedgerMessage append(String value) throws LedgerException {
+        LedgerMessage request = new LedgerMessage();
+        request.setType(LedgerMessage.LedgerMessageType.Append);
+        request.setArg(value);
+        for (; ; ) {
+            try (DatagramSocket socket = new DatagramSocket()) {
+                socket.setSoTimeout(1000);
+                var address = InetAddress.getByName(server.getHostname());
+                var port = server.getClientPort();
+                String json = new Gson().toJson(request);
+                var packet = new DatagramPacket(json.getBytes(), json.getBytes().length, address, port);
+                socket.send(packet);
+                var response = new DatagramPacket(new byte[1024], 1024);
+                socket.receive(response);
+                return new Gson().fromJson(new String(response.getData()), LedgerMessage.class); //TODO send message and return real response
+            } catch (SocketTimeoutException e) {
+                // do nothing, loop
+            } catch (IOException e) {
+                throw new LedgerException(ErrorMessage.CannotOpenSocket);
+            }
+        }
     }
 
-    public List<String> read(){
-        Message message = new Message(id, messageId++, Type.START);
-        link.broadcast(message);
-        return listen();
-    }
-
-    private List<String> listen() {
-        while (true) {
-            try {
-                Message message = link.receive();
-                switch (message.getType()) {
-                    case DECIDE -> {
-                        LOGGER.log(Level.INFO, "{0} - Received DECIDE message from {1}",
-                                new Object[]{id, message.getSenderId()});
-                        return message.getArgs(); // Content of the blockchain
-                    }
-
-                    case ACK -> {
-                        LOGGER.log(Level.INFO, "{0} - Received ACK message from {1}",
-                                new Object[]{id, message.getSenderId()});
-                        // ignore
-                    }
-    
-                    case IGNORE -> {
-                        LOGGER.log(Level.INFO, "{0} - Received IGNORE message from {1}",
-                                new Object[]{id, message.getSenderId()});
-                        // ignore
-                    }
-    
-                    default -> {
-                        LOGGER.log(Level.INFO, "{0} - Received unknown message from {1}",
-                                new Object[]{id, message.getSenderId()});
-                        // ignore
-                    }
-                }
-            } catch (ClassNotFoundException | IOException e) {
-                e.printStackTrace();
+    public LedgerMessage read() throws LedgerException {
+        LedgerMessage request = new LedgerMessage();
+        request.setType(LedgerMessage.LedgerMessageType.Read);
+        for (; ; ) {
+            try (DatagramSocket socket = new DatagramSocket()) {
+                socket.setSoTimeout(1000);
+                var address = InetAddress.getByName(server.getHostname());
+                var port = server.getClientPort();
+                String json = new Gson().toJson(request);
+                var packet = new DatagramPacket(json.getBytes(), json.getBytes().length, address, port);
+                socket.send(packet);
+                var response = new DatagramPacket(new byte[1024], 1024);
+                socket.receive(response);
+                return new Gson().fromJson(new String(response.getData()), LedgerMessage.class); //TODO send message and return real response
+            } catch (SocketTimeoutException e) {
+                // do nothing, loop
+            } catch (IOException e) {
+                throw new LedgerException(ErrorMessage.CannotOpenSocket);
             }
         }
     }
