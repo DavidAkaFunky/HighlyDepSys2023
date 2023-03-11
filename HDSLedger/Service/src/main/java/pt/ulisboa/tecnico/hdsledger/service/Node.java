@@ -40,6 +40,8 @@ public class Node {
 
             // Service implementation
             NodeService service = new NodeService(id, nodeConfig.isLeader(), link, nodes.length);
+            LedgerService ledgerService = new LedgerService(nodeConfig);
+            ledgerService.start();
 
             while (true) {
                 try {

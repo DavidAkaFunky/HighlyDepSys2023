@@ -39,7 +39,7 @@ public class Library {
     }
 
     public List<String> write(String value) {
-        List<String> args = new ArrayList<String>();
+        List<String> args = new ArrayList<>();
         args.add(value);
         Message message = new Message(id, messageId++, Type.START, args);
         link.broadcast(message);

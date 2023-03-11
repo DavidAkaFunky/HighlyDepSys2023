@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 import java.util.concurrent.ConcurrentHashMap;
 
-public class NodeService {
+public class NodeService implements UDPService {
 
     // Store strings
     private final Queue<String> blockchain = new ConcurrentLinkedQueue<>();
@@ -194,5 +194,8 @@ public class NodeService {
         // TODO: There is no round change, so this is a primitive version of the check
         return round == 1;
     }
+
+    @Override
+    public void start() {}
 
 }

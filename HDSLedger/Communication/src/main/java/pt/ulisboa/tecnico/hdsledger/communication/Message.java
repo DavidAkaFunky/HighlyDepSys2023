@@ -43,6 +43,10 @@ public class Message implements Serializable {
         this.type = type;
     }
 
+    public void setMessageId(int messageId) {
+        this.messageId = messageId;
+    }
+
     public List<String> getArgs() {
         return args;
     }
