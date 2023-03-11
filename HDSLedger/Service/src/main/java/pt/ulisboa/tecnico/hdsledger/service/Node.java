@@ -39,72 +39,9 @@ public class Node {
             PerfectLink link = new PerfectLink(nodeConfig, nodes);
 
             // Service implementation
-            NodeService service = new NodeService(id, nodeConfig.isLeader(), link, nodes.length);
-            LedgerService ledgerService = new LedgerService(nodeConfig);
-            ledgerService.listen();
-
-            while (true) {
-                try {
-                    Message message = link.receive();
-
-                    // Separate thread to handle each message
-                    new Thread(() -> {
-                        switch (message.getType()) {
-                            case START -> {
-                                LOGGER.log(Level.INFO, "{0} - Received START message from {1}",
-                                        new Object[]{id, message.getSenderId()});
-                                service.startConsensus(message);
-                            }
-                            
-                            case PRE_PREPARE -> {
-                                LOGGER.log(Level.INFO, "{0} - Received PRE-PREPARE message from {1}",
-                                        new Object[]{id, message.getSenderId()});
-                                service.uponPrePrepare(message);
-                            }
-
-                            case PREPARE -> {
-                                LOGGER.log(Level.INFO, "{0} - Received PREPARE message from {1}",
-                                        new Object[]{id, message.getSenderId()});
-                                service.uponPrepare(message);
-                            }
-
-                            case COMMIT -> {
-                                LOGGER.log(Level.INFO, "{0} - Received COMMIT message from {1}",
-                                        new Object[]{id, message.getSenderId()});
-                                service.uponCommit(message);
-
-                            }
-
-                            case ROUND_CHANGE -> {
-                                LOGGER.log(Level.INFO, "{0} - Received ROUND-CHANGE message from {1}",
-                                        new Object[]{id, message.getSenderId()});
-                                // stage 2
-                            }
-
-                            case ACK -> {
-                                LOGGER.log(Level.INFO, "{0} - Received ACK message from {1}",
-                                        new Object[]{id, message.getSenderId()});
-                                // ignore
-                            }
-
-                            case IGNORE -> {
-                                LOGGER.log(Level.INFO, "{0} - Received IGNORE message from {1}",
-                                        new Object[]{id, message.getSenderId()});
-                                // ignore
-                            }
-
-                            default -> {
-                                LOGGER.log(Level.INFO, "{0} - Received unknown message from {1}",
-                                        new Object[]{id, message.getSenderId()});
-                                // ignore
-                            }
-                        }
-                    }).start();
-
-                } catch (ClassNotFoundException | IOException e) {
-                    e.printStackTrace();
-                }
-            }
+            NodeService nodeService = new NodeService(id, nodeConfig.isLeader(), link, nodes.length);
+            nodeService.listen();
+            new LedgerService(nodeConfig, nodeService).listen();
 
         } catch (Exception e) {
             e.printStackTrace();

@@ -6,7 +6,8 @@ public enum ErrorMessage {
     NoSuchNode("Can't send a message to a non existing node"),
     SocketSendingError("Error while sending message"),
     SocketReceivingError("Error while receiving message"),
-    CannotOpenSocket("Error while opening socket");
+    CannotOpenSocket("Error while opening socket"),
+    CannotParseMessage("Error while parsing received message");
 
     private final String message;
 

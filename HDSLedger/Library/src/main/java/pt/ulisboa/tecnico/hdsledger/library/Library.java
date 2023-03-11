@@ -30,7 +30,7 @@ public class Library {
 
     public LedgerMessage append(String value) throws LedgerException {
         LedgerMessage request = new LedgerMessage();
-        request.setType(LedgerMessage.LedgerMessageType.Append);
+        request.setType(LedgerMessage.LedgerMessageType.APPEND);
         request.setArg(value);
         for (; ; ) {
             try (DatagramSocket socket = new DatagramSocket()) {
@@ -55,7 +55,7 @@ public class Library {
 
     public LedgerMessage read() throws LedgerException {
         LedgerMessage request = new LedgerMessage();
-        request.setType(LedgerMessage.LedgerMessageType.Read);
+        request.setType(LedgerMessage.LedgerMessageType.READ);
         for (; ; ) {
             try (DatagramSocket socket = new DatagramSocket()) {
                 socket.setSoTimeout(1000);

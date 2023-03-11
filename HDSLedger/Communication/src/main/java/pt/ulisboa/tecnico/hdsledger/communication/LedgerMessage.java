@@ -3,9 +3,11 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 public class LedgerMessage {
 
     public enum LedgerMessageType {
-        Append, Read
+        APPEND, READ
     }
     protected LedgerMessageType type;
+    // this is 
+    protected int clientSeq;
     protected String arg;
 
     public LedgerMessageType getType() {

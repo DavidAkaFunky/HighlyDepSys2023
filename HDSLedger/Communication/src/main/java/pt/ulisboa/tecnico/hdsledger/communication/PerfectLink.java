@@ -127,8 +127,13 @@ public class PerfectLink {
     /*
      * Receives a message from any node in the network
      */
-    public Message receive(DatagramPacket packet) {
+    public Message receive() throws IOException, ClassNotFoundException {
 
+        byte[] buf = new byte[1024];
+        DatagramPacket packet = new DatagramPacket(buf, buf.length);
+
+        socket.receive(packet);
+        
         Message message;
         try {
             message = Serializer.deserialize(packet.getData(), Message.class);
@@ -140,6 +145,7 @@ public class PerfectLink {
         SimplexLink recLink = receiverLinks.get(message.getSenderId());
         if (sendLink == null || recLink == null)
             throw new LedgerException(ErrorMessage.NoSuchNode);
+
         // ACK -> tratar logo
         if (message.getType().equals(Message.Type.ACK)) {
             int lastAck = sendLink.tryUpdateSeq(message.getMessageId());
