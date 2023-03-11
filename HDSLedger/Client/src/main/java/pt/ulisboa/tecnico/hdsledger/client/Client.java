@@ -1,15 +1,18 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
 import pt.ulisboa.tecnico.hdsledger.library.Library;
+import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
+
+import java.util.Base64;
 import java.util.Scanner;
 
 public class Client {
 
-    public static void main(String[] args){
+    public static void main(String[] args) {
 
         final Scanner scanner = new Scanner(System.in);
 
-        while(true){
+        while (true) {
             System.out.printf("%n> ");
             String line = scanner.nextLine();
 
@@ -22,8 +25,37 @@ public class Client {
             String[] tokens = line.split(" ");
 
             switch (tokens[0]) {
+                case "test" -> {
+                    try {
+                        String testString = "HelloWorld!";
+                        String digestBase64 = RSAEncryption.sign(testString, "../PKI/priv.key");
+                        System.out.println("Digest encrypted: " + digestBase64);
+                        // create message from testString and digestEncrypted
+                        String message = testString + " " + digestBase64 ;
+                        // send message to server
+                        // ...
+                        // receive message from server
+                        // split message into testString and digestEncrypted
+                        String[] messageTokens = message.split(" ");
+                        String receivedTestString = messageTokens[0];
+                        String receivedDigestEncrypted = messageTokens[1];
+                        System.out.println("Received digest: " + receivedDigestEncrypted);
+                        // decrypt digestEncrypted
+                        boolean valid = RSAEncryption.verifySignature(receivedDigestEncrypted, "../PKI/pub.key");
+                        if (valid) {
+                            System.out.println("Valid signature!");
+                        } else {
+                            System.out.println("Invalid signature!");
+                        }
+
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        System.err.println("Error: " + e.getMessage());
+                    }
+                }
                 case "write" -> {
-                    if (tokens.length == 1){
+                    if (tokens.length == 1) {
                         System.out.println("Writing to blockchain...");
                         System.out.println(tokens[1]);
                     } else {
@@ -32,7 +64,7 @@ public class Client {
                 }
                 case "read" -> {
                     System.out.println("Reading blockchain...");
-                    
+
                 }
                 case "exit" -> {
                     System.out.println("Exiting...");
@@ -41,7 +73,7 @@ public class Client {
                 }
                 default -> {
                     System.err.println("Unrecognized command:" + line);
-                }    
+                }
             }
         }
     }

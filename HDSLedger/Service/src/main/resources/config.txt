@@ -1,3 +1,0 @@
-[{"id": "1", "isLeader": true, "hostname": "localhost", "port": 3000},
-{"id": "2", "isLeader": false, "hostname": "localhost", "port": 3001},
-{"id": "3", "isLeader": false, "hostname": "localhost", "port": 3002}]
