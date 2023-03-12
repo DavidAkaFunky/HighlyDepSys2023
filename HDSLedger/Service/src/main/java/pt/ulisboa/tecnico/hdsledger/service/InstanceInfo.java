@@ -2,9 +2,10 @@ package pt.ulisboa.tecnico.hdsledger.service;
 
 public class InstanceInfo {
     private int currentRound = 1;
-    private int preparedRound = Constants.BOTTOM;
-    private String preparedValue = null;
+    private int preparedRound = -1;
+    private String preparedValue;
     private String inputValue;
+    private int committedRound = -1;
 
     public InstanceInfo(String inputValue) {
         this.inputValue = inputValue;
@@ -40,5 +41,13 @@ public class InstanceInfo {
 
     public void setInputValue(String inputValue) {
         this.inputValue = inputValue;
+    }
+
+    public int getCommittedRound() {
+        return committedRound;
+    }
+
+    public void setCommittedRound(int committedRound) {
+        this.committedRound = committedRound;
     }
 }

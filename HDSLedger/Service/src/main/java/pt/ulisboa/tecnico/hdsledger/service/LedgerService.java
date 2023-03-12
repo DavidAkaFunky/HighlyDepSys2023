@@ -1,12 +1,14 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
 
 import java.io.IOException;
 import java.net.*;
+import java.text.MessageFormat;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.Arrays;
@@ -24,7 +26,7 @@ public class LedgerService implements UDPService {
     // processos simples para identificar cada pedido: cliente calcula hash de
     // mensagem + timestamp + ip do cliente
     private final Set<String> nonces = ConcurrentHashMap.newKeySet();
-    private final Logger logger = Logger.getLogger(LedgerService.class.getName());
+    private static final CustomLogger LOGGER = new CustomLogger(LedgerService.class.getName());
     private Thread thread;
 
     public LedgerService(NodeConfig self, NodeService service) {
@@ -72,8 +74,8 @@ public class LedgerService implements UDPService {
                 // Packet to receive client requests
                 DatagramPacket packet = new DatagramPacket(new byte[1024], 1024);
 
-                logger.log(Level.INFO, "Started LedgerService on {0}:{1}",
-                        new Object[] { address, port });
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Started LedgerService on {1}:{2}",
+                        config.getId(), address, port ));
 
                 for (;;) {
 

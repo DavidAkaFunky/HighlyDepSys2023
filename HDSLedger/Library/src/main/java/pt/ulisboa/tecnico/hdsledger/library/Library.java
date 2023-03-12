@@ -2,6 +2,7 @@ package pt.ulisboa.tecnico.hdsledger.library;
 
 import com.google.gson.Gson;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
@@ -14,11 +15,10 @@ import java.net.InetAddress;
 import java.net.SocketTimeoutException;
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.logging.Logger;
 
 public class Library {
 
-    private static final Logger LOGGER = Logger.getLogger(Library.class.getName());
+    private static final CustomLogger LOGGER = new CustomLogger(Library.class.getName());
     private static final String CONFIG = "../Service/src/main/resources/config.json";
     private final NodeConfig server;
 

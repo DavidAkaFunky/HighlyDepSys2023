@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
@@ -7,18 +8,18 @@ import pt.ulisboa.tecnico.hdsledger.utilities.Serializer;
 
 import java.io.IOException;
 import java.net.*;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class PerfectLink {
 
     // Time to wait for an ACK before resending the message
     private static final int ACK_WAIT_TIME = 1000;
-    private static final Logger LOGGER = Logger.getLogger(PerfectLink.class.getName());
+    private static final CustomLogger LOGGER = new CustomLogger(PerfectLink.class.getName());
     // UDP Socket
     private final DatagramSocket socket;
     // Map of all nodes in the network
@@ -87,14 +88,14 @@ public class PerfectLink {
                 int count = 1;
 
                 for (;;) {
-                    LOGGER.log(Level.INFO, "Sending message for the " + count++ + " time");
+                    LOGGER.log(Level.INFO, MessageFormat.format("{0} - Sending {1} message to {2}:{3} - Attempt #{4}", config.getId(), data.getType(), destAddress, destPort, count++));
                     unreliableSend(destAddress, destPort, data);
                     // update with 0 as the argument is just a get (update only happens when arg == lastAck + 1)
                     if (sendLink.tryUpdateSeq(0) >= data.getMessageId()) break;
                     Thread.sleep(ACK_WAIT_TIME);
                 }
                 // link.updateAck(messageId);
-                LOGGER.log(Level.INFO, "Message sent successfully");
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} - successfully", config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }

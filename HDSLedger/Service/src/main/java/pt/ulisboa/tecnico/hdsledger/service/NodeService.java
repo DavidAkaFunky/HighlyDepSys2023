@@ -2,8 +2,10 @@ package pt.ulisboa.tecnico.hdsledger.service;
 
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 import java.io.IOException;
+import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +21,7 @@ import java.util.logging.Logger;
 
 public class NodeService implements UDPService {
 
-    private static final Logger LOGGER = Logger.getLogger(NodeService.class.getName());
+    private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
 
     // Store strings
     private final Queue<String> blockchain = new ConcurrentLinkedQueue<>();
@@ -62,8 +64,7 @@ public class NodeService implements UDPService {
     }
 
     public void printBlockchain() {
-        LOGGER.log(Level.INFO, "Blockchain from node {0}", nodeId);
-        LOGGER.log(Level.INFO, "Blockchain from " + nodeId + ": ");
+        LOGGER.log(Level.INFO, MessageFormat.format("Blockchain from node {0}", nodeId));
         getBlockchain().forEach((x) -> LOGGER.log(Level.INFO, x + " "));
     }
 
@@ -136,7 +137,6 @@ public class NodeService implements UDPService {
             Message prepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PREPARE, message.getArgs());
             this.link.broadcast(prepareMessage);
         }
-
     }
 
     /*
@@ -150,13 +150,15 @@ public class NodeService implements UDPService {
 
         prepareMessages.addMessage(consensusInstance, round, value);
 
+        InstanceInfo instance = this.instanceInfo.get(consensusInstance);
+        
         // Find value with valid quorum
         Optional<String> preparedValue = prepareMessages.hasValidQuorum(consensusInstance, round);
-        if (preparedValue.isPresent()) {
+        if (preparedValue.isPresent() && (instance == null || instance.getPreparedRound() < round) ) {
 
             // Set instance values
             this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
-            InstanceInfo instance = this.instanceInfo.get(consensusInstance);
+            instance = this.instanceInfo.get(consensusInstance);
             instance.setPreparedRound(round);
             instance.setPreparedValue(preparedValue.get());
 
@@ -183,8 +185,10 @@ public class NodeService implements UDPService {
 
         commitMessages.addMessage(consensusInstance, round, value);
 
-        Optional<String> preparedValue = commitMessages.hasValidQuorum(consensusInstance, round);
-        if (preparedValue.isPresent()) {
+        InstanceInfo instance = this.instanceInfo.get(consensusInstance);
+
+        Optional<String> committedValue = commitMessages.hasValidQuorum(consensusInstance, round);
+        if (committedValue.isPresent() && (instance == null || instance.getCommittedRound() < round)) {
             // this.timer.cancel(); // Not needed for now
             // this.consensusInstance and this.preparedValue will always be the same as the
             // ones in the message
@@ -199,7 +203,12 @@ public class NodeService implements UDPService {
                 }
             }
             
-            this.addBlock(preparedValue.get());
+            // Very weird if it's absent
+            this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
+            instance = this.instanceInfo.get(consensusInstance);
+            instance.setCommittedRound(round);
+
+            this.addBlock(committedValue.get());
             synchronized (this) {
                 printBlockchain();
             }
@@ -229,44 +238,51 @@ public class NodeService implements UDPService {
                             switch (message.getType()) {
 
                                 case PRE_PREPARE -> {
-                                    LOGGER.log(Level.INFO, "{0} - Received PRE-PREPARE message from {1}",
-                                            new Object[] { id, message.getSenderId() });
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received PRE-PREPARE message from {1}",
+                                                    nodeId, id));
                                     uponPrePrepare(message);
                                 }
 
                                 case PREPARE -> {
-                                    LOGGER.log(Level.INFO, "{0} - Received PREPARE message from {1}",
-                                            new Object[] { id, message.getSenderId() });
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received PREPARE message from {1}",
+                                                    nodeId, id));
                                     uponPrepare(message);
                                 }
 
                                 case COMMIT -> {
-                                    LOGGER.log(Level.INFO, "{0} - Received COMMIT message from {1}",
-                                            new Object[] { id, message.getSenderId() });
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received COMMIT message from {1}",
+                                                    nodeId, id));
                                     uponCommit(message);
                                 }
 
                                 case ROUND_CHANGE -> {
-                                    LOGGER.log(Level.INFO, "{0} - Received ROUND-CHANGE message from {1}",
-                                            new Object[] { id, message.getSenderId() });
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}",
+                                                    nodeId, id));
                                     // stage 2
                                 }
 
                                 case ACK -> {
-                                    LOGGER.log(Level.INFO, "{0} - Received ACK message from {1}",
-                                            new Object[] { id, message.getSenderId() });
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received ACK message from {1}",
+                                                    nodeId, id));
                                     // ignore
                                 }
 
                                 case IGNORE -> {
-                                    LOGGER.log(Level.INFO, "{0} - Received IGNORE message from {1}",
-                                            new Object[] { id, message.getSenderId() });
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received IGNORE message from {1}",
+                                                    nodeId, id));
                                     // ignore
                                 }
 
                                 default -> {
-                                    LOGGER.log(Level.INFO, "{0} - Received unknown message from {1}",
-                                            new Object[] { id, message.getSenderId() });
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received unknown message from {1}",
+                                                    nodeId, id));
                                     // ignore
                                 }
                             }
