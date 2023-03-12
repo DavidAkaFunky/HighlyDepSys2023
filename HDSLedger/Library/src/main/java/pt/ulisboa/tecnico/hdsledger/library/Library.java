@@ -7,13 +7,11 @@ import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfigBuilder;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketTimeoutException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.logging.Logger;
@@ -26,30 +24,53 @@ public class Library {
 
     public Library() {
         // Get leader from config file
-        Optional<NodeConfig> server = Arrays.stream(new NodeConfigBuilder().fromFile(CONFIG)).filter(NodeConfig::isLeader).findFirst();
-        if (server.isEmpty()) throw new LedgerException(ErrorMessage.ConfigFileFormat);
+        Optional<NodeConfig> server = Arrays.stream(new NodeConfigBuilder().fromFile(CONFIG))
+                .filter(NodeConfig::isLeader).findFirst();
+        if (server.isEmpty())
+            throw new LedgerException(ErrorMessage.ConfigFileFormat);
         this.server = server.get();
     }
 
+    /*
+     * Append a value to the blockchain
+     * This method is intentionally blocking
+     * 
+     * @param value the value to be appended
+     */
     public LedgerMessage append(String value) throws LedgerException {
+
+        // Create message to send to blockchain service
         LedgerMessage request = new LedgerMessage();
         request.setType(LedgerMessage.LedgerMessageType.APPEND);
         request.setArg(value);
+
         for (;;) {
             try {
+
+                // Create socket to send and receive message
                 DatagramSocket socket = new DatagramSocket();
                 socket.setSoTimeout(1000);
-                var address = InetAddress.getByName(server.getHostname());
-                var port = server.getClientPort();
+                InetAddress address = InetAddress.getByName(server.getHostname());
+                int port = server.getClientPort();
+
+                // Create UDP packet
                 String json = new Gson().toJson(request);
-                var packet = new DatagramPacket(json.getBytes(), json.getBytes().length, address, port);
+                DatagramPacket packet = new DatagramPacket(json.getBytes(), json.getBytes().length, address, port);
+
+                // Send packet
                 socket.send(packet);
-                var response = new DatagramPacket(new byte[1024], 1024);
+
+                // Receive response
+                DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
                 socket.receive(response);
                 byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
+
+                socket.close();
+
                 // TODO check this return
                 // TODO add a NONCE to this message to be appended to the blockchain
                 return new Gson().fromJson(new String(buffer), LedgerMessage.class);
+
             } catch (SocketTimeoutException e) {
                 // do nothing, loop
             } catch (IOException e) {
@@ -59,20 +80,36 @@ public class Library {
     }
 
     public LedgerMessage read() throws LedgerException {
+
+        // Create message to send to blockchain service
         LedgerMessage request = new LedgerMessage();
         request.setType(LedgerMessage.LedgerMessageType.READ);
+
         for (;;) {
             try {
+
+                // Create socket to send and receive message
                 DatagramSocket socket = new DatagramSocket();
                 socket.setSoTimeout(1000);
-                var address = InetAddress.getByName(server.getHostname());
-                var port = server.getClientPort();
+                InetAddress address = InetAddress.getByName(server.getHostname());
+                int port = server.getClientPort();
+
+                // Create UDP packet
                 String json = new Gson().toJson(request);
-                var packet = new DatagramPacket(json.getBytes(), json.getBytes().length, address, port);
+                DatagramPacket packet = new DatagramPacket(json.getBytes(), json.getBytes().length, address, port);
+
+                // Send packet
                 socket.send(packet);
+
+                // Receive response
                 var response = new DatagramPacket(new byte[1024], 1024);
                 socket.receive(response);
-                return new Gson().fromJson(new String(response.getData()), LedgerMessage.class); //TODO send message and return real response
+                byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
+
+                socket.close();
+                return new Gson().fromJson(new String(buffer), LedgerMessage.class); // TODO send message
+                                                                                     // and return real
+                                                                                     // response
             } catch (SocketTimeoutException e) {
                 // do nothing, loop
             } catch (IOException e) {

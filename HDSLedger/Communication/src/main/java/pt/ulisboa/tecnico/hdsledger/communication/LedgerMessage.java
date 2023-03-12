@@ -5,6 +5,7 @@ public class LedgerMessage {
     public enum LedgerMessageType {
         APPEND, READ
     }
+
     protected LedgerMessageType type;
     protected int clientSeq;
     protected String arg;

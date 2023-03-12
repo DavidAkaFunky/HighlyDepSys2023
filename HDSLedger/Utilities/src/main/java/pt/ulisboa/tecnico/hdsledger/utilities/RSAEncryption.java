@@ -94,7 +94,7 @@ public class RSAEncryption {
         String digest = digest(data);
         byte[] digestEncrypted = encrypt(digest.getBytes(), pathToPrivateKey);
         String digestBase64 = Base64.getEncoder().encodeToString(digestEncrypted);
-        
+
         return digestBase64;
     }
 

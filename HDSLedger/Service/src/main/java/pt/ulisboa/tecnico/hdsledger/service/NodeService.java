@@ -191,17 +191,24 @@ public class NodeService implements UDPService {
             // Decide(this.consensusInstance, this.preparedValue, Quorum (why?) )
 
             // Add block to blockchain
-            // TODO: FIX ACTIVE WAITING
-            while (blockchain.size() < consensusInstance);
+            while (blockchain.size() < consensusInstance) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+            
             this.addBlock(preparedValue.get());
-            synchronized(this){
+            synchronized (this) {
                 printBlockchain();
             }
         }
     }
 
     private boolean justifyPrePrepare(int consensusInstance, int round, String value) {
-        // TODO: There is no round change, so this is a primitive version of the jusitification
+        // TODO: There is no round change, so this is a primitive version of the
+        // jusitification
         return round == 1;
     }
 
