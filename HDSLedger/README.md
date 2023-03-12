@@ -5,7 +5,7 @@
 Maven Lifecycle has 8-stages
 
 | Stage               | Command     |
-|---------------------|-------------|
+| ------------------- | ----------- |
 | Validation          | 😏          |
 | Compilation         | mvn compile |
 | Testing             | mvn test    |
@@ -15,28 +15,50 @@ Maven Lifecycle has 8-stages
 | Installation        | 😏          |
 | Deployment          | mvn deploy  |
 
+## Public Key Infrastructure
+
+### Compile generator
+```
+javac *.java
+```
+### Generating keys
+```
+java RSAKeyGenerator w ./<NODE_ID>.pub ./<NODE_ID>
+```
+### Test keys
+
 ## Maven
+
 ### Instalation
+
 Compile and install all modules
+
 ```
 mvn clean install
 ```
+
 ### Execution
+
 Run without arguments
+
 ```
 cd <module>/
 mvn compile exec:java
 ```
+
 or with arguments
+
 ```
 cd <module>/
 mvn compile exec:java -Dexec.args="..."
 ```
 
 ## To run this outside of Intellij (outdated)
+
 ```
 java -classpath target/classes blockchain.Node
 ```
 
 ## Built With
-* [Maven](https://maven.apache.org/) - Build and dependency management tool;
+
+- [Maven](https://maven.apache.org/) - Build and dependency management tool;

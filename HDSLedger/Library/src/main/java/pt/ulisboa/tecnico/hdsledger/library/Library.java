@@ -21,7 +21,7 @@ import java.util.logging.Logger;
 public class Library {
 
     private static final Logger LOGGER = Logger.getLogger(Library.class.getName());
-    private static final String CONFIG = "../Service/src/main/resources/config.txt";
+    private static final String CONFIG = "../Service/src/main/resources/config.json";
     private final NodeConfig server;
 
     public Library() {

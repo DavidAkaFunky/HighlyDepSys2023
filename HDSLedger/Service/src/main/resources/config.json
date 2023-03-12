@@ -1,0 +1,23 @@
+[
+    {
+        "id": "1",
+        "isLeader": true,
+        "hostname": "localhost",
+        "port": 3000,
+        "clientPort": 4000
+    },
+    {
+        "id": "2",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3001,
+        "clientPort": 4001
+    },
+    {
+        "id": "3",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3002,
+        "clientPort": 4002
+    }
+]
