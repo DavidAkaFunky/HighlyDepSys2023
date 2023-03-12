@@ -6,7 +6,6 @@ public class LedgerMessage {
         APPEND, READ
     }
     protected LedgerMessageType type;
-    // this is 
     protected int clientSeq;
     protected String arg;
 

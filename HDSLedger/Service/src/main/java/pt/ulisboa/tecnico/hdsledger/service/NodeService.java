@@ -61,6 +61,12 @@ public class NodeService implements UDPService {
         return blockchain;
     }
 
+    public void printBlockchain() {
+        LOGGER.log(Level.INFO, "Blockchain from node {0}", nodeId);
+        LOGGER.log(Level.INFO, "Blockchain from " + nodeId + ": ");
+        getBlockchain().forEach((x) -> LOGGER.log(Level.INFO, x + " "));
+    }
+
     // BIG TODO: What needs to be synchronized?
 
     /*
@@ -185,10 +191,12 @@ public class NodeService implements UDPService {
             // Decide(this.consensusInstance, this.preparedValue, Quorum (why?) )
 
             // Add block to blockchain
-            while (blockchain.size() < consensusInstance) {
-                this.addBlock(preparedValue.get());
+            // TODO: FIX ACTIVE WAITING
+            while (blockchain.size() < consensusInstance);
+            this.addBlock(preparedValue.get());
+            synchronized(this){
+                printBlockchain();
             }
-
         }
     }
 

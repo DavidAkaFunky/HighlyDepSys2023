@@ -73,18 +73,19 @@ public class LedgerService implements UDPService {
 
     @Override
     public void listen() {
-        try (DatagramSocket socket = new DatagramSocket(config.getClientPort(),
-                InetAddress.getByName(config.getHostname()))) {
             // Thread to listen on every request
             // This is not thread safe but it's okay because
             // a client only sends one request at a time
             // thread listening for client requests on clientPort {Append, Read}
             new Thread(() -> {
-                DatagramPacket packet = new DatagramPacket(new byte[1024], 1024);
+                
                 try {
+                    DatagramSocket socket = new DatagramSocket(config.getClientPort(),
+                        InetAddress.getByName(config.getHostname()));
+                    DatagramPacket packet = new DatagramPacket(new byte[1024], 1024);
                     // while()
                     logger.log(Level.INFO, "Started LedgerService on {0}:{1}",
-                            new Object[] { socket.getInetAddress(), socket.getPort() });
+                            new Object[] { config.getHostname(), config.getClientPort() });
                     socket.receive(packet);
                     // thread to handle the client request and respond to him
                     // server has received a request, we spawn a new thread to handle it
@@ -123,13 +124,13 @@ public class LedgerService implements UDPService {
 
                     // no perfect link because thread is only for this client connection
                     // handle the message itself
+                } catch (SocketException | UnknownHostException e) {
+                    throw new LedgerException(ErrorMessage.CannotOpenSocket);
                 } catch (IOException e) {
-                    throw new LedgerException(ErrorMessage.SocketReceivingError);
+                    e.printStackTrace();
+                    // throw new LedgerException(ErrorMessage.SocketReceivingError);
                 }
             }).start();
-        } catch (SocketException | UnknownHostException e) {
-            throw new LedgerException(ErrorMessage.CannotOpenSocket);
-        }
     }
 
 }

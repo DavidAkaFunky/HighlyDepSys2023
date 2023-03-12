@@ -5,9 +5,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfigBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
-import pt.ulisboa.tecnico.hdsledger.communication.Message;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.logging.Level;
@@ -47,12 +45,5 @@ public class Node {
             e.printStackTrace();
         }
     }
-    
-    public static void listenToClients(PerfectLink link){
 
-    }
-
-    public static void listenToNodes(PerfectLink link){
-
-    }
 }
