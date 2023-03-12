@@ -5,7 +5,7 @@ import java.util.List;
 
 public class Message implements Serializable {
 
-    private String senderId;
+    private final String senderId;
     private int messageId;
     private Type type;
     private List<String> args;
@@ -41,6 +41,10 @@ public class Message implements Serializable {
 
     public void setType(Type type) {
         this.type = type;
+    }
+
+    public void setMessageId(int messageId) {
+        this.messageId = messageId;
     }
 
     public List<String> getArgs() {

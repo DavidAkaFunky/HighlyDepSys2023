@@ -1,17 +1,18 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
+import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.Serializer;
+
 import java.io.IOException;
 import java.net.*;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.Serializer;
-import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
-import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 
 public class PerfectLink {
 
@@ -21,23 +22,30 @@ public class PerfectLink {
     // UDP Socket
     private final DatagramSocket socket;
     // Map of all nodes in the network
-    private final ConcurrentHashMap<String, NodeConfig> nodes = new ConcurrentHashMap<>();
+    private final Map<String, NodeConfig> nodes = new ConcurrentHashMap<>();
     // Map ID to a unidirectional link, in this case where this node is the sender
-    private final ConcurrentHashMap<String, SimplexLink> senderLinks = new ConcurrentHashMap<>();
+    private final Map<String, SimplexLink> senderLinks = new ConcurrentHashMap<>();
     // Map ID to a unidirectional link, in this case where this node is the receiver
-    private final ConcurrentHashMap<String, SimplexLink> receiverLinks = new ConcurrentHashMap<>();
+    private final Map<String, SimplexLink> receiverLinks = new ConcurrentHashMap<>();
     // Reference to the node itself
-    private final NodeConfig node;
+    private final NodeConfig config;
 
     public PerfectLink(NodeConfig self, NodeConfig[] nodes) {
-        this.node = self;
+        this.config = self;
         Arrays.stream(nodes).forEach(node -> {
             this.nodes.put(node.getId(), node);
-            this.senderLinks.put(node.getId(), new SimplexLink());
-            this.receiverLinks.put(node.getId(), new SimplexLink());
+            // extremely scuffed as it makes us impose that port numbers are different in every host,
+            // but it is what it is
+            this.senderLinks.put(node.getId(),
+                    new SimplexLinkBuilder().setSourceNodeConfig(config).setDestinationNodeConfig(node).build()
+            );
+            this.receiverLinks.put(node.getId(),
+                    new SimplexLinkBuilder().setSourceNodeConfig(node).setDestinationNodeConfig(config).build()
+            );
+
         });
         try {
-            this.socket = new DatagramSocket(node.getPort(), InetAddress.getByName(node.getHostname()));
+            this.socket = new DatagramSocket(config.getPort(), InetAddress.getByName(config.getHostname()));
         } catch (UnknownHostException | SocketException e) {
             throw new LedgerException(ErrorMessage.CannotOpenSocket);
         }
@@ -49,9 +57,7 @@ public class PerfectLink {
      * @param data The message to be broadcasted
      */
     public void broadcast(Message data) {
-        nodes.forEach((destId, dest) -> {
-            send(dest.getHostname(), dest.getPort(), data);
-        });
+        nodes.forEach((destId, dest) -> send(destId, data));
     }
 
     /*
@@ -63,22 +69,31 @@ public class PerfectLink {
      *
      * @param data The message to be sent
      */
-    public void send(String hostname, int port, Message data) {
+    public void send(String nodeId, Message data) {
         // Spawn a new thread to send the message
         // To avoid blocking while waiting for ACK
         new Thread(() -> {
             try {
-                int messageId = data.getMessageId();
-                SimplexLink link = senderLinks.get(node.getId());
+                // this validates input
+                SimplexLink sendLink = senderLinks.get(nodeId);
+                SimplexLink recLink = receiverLinks.get(nodeId);
+                if (sendLink == null || recLink == null)
+                    throw new LedgerException(ErrorMessage.NoSuchNode);
+                // move message stamping to perfect links
+                data.setMessageId(sendLink.stampMessage());
                 // If the message is not ACK, within 1 second it will be resent
+                InetAddress destAddress = InetAddress.getByName(sendLink.getDestinationNodeConfig().getHostname());
+                int destPort = sendLink.getDestinationNodeConfig().getPort();
                 int count = 1;
-                for (; ; ) {
+
+                for (;;) {
                     LOGGER.log(Level.INFO, "Sending message for the " + count++ + " time");
-                    unreliableSend(InetAddress.getByName(hostname), port, data);
-                    if (link.isPast(messageId)) break;
+                    unreliableSend(destAddress, destPort, data);
+                    // update with 0 as the argument is just a get (update only happens when arg == lastAck + 1)
+                    if (sendLink.tryUpdateSeq(0) >= data.getMessageId()) break;
                     Thread.sleep(ACK_WAIT_TIME);
                 }
-                link.updateAck(messageId);
+                // link.updateAck(messageId);
                 LOGGER.log(Level.INFO, "Message sent successfully");
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
@@ -109,73 +124,51 @@ public class PerfectLink {
         }).start();
     }
 
-
-    private NodeConfig safeGet(String nodeId, InetAddress address, int port) {
-        nodes.putIfAbsent(nodeId, new NodeConfig(nodeId, address.toString(), port));
-        return nodes.get(nodeId);
-    }
-
     /*
      * Receives a message from any node in the network
      */
     public Message receive() throws IOException, ClassNotFoundException {
-        byte[] buf = new byte[512];
+
+        byte[] buf = new byte[1024];
         DatagramPacket packet = new DatagramPacket(buf, buf.length);
 
         socket.receive(packet);
+        
+        Message message;
+        try {
+            message = Serializer.deserialize(packet.getData(), Message.class);
+        } catch (IOException | ClassNotFoundException e) {
+            throw new LedgerException(ErrorMessage.SocketReceivingError);
+        }
 
-        InetAddress address = packet.getAddress();
-        int port = packet.getPort();
-
-        Message message = Serializer.deserialize(packet.getData(), Message.class);
-
-        NodeConfig node = safeGet(message.getSenderId(), address, port);
+        SimplexLink sendLink = senderLinks.get(message.getSenderId());
+        SimplexLink recLink = receiverLinks.get(message.getSenderId());
+        if (sendLink == null || recLink == null)
+            throw new LedgerException(ErrorMessage.NoSuchNode);
 
         // ACK -> tratar logo
         if (message.getType().equals(Message.Type.ACK)) {
-            SimplexLink link = senderLinks.get(node.getId());
-            int lastAck = link.updateAck(message.getMessageId());
-            if (lastAck != (message.getMessageId() + 1)) message.setType(Message.Type.IGNORE);
+            int lastAck = sendLink.tryUpdateSeq(message.getMessageId());
+            if (lastAck != message.getMessageId()) message.setType(Message.Type.IGNORE);
             return message;
         }
 
         // Normal -> if (nao ha buracos): devolve else: ignora
-        SimplexLink link = receiverLinks.get(node.getId());
-        if (link.isExpected(message.getMessageId())) {
+        if (recLink.tryUpdateSeq(message.getMessageId()) == message.getMessageId()){
             // ACK is sent without needing for another ACK because
             // we're assuming an eventually synchronous network
             // Even if a node receives the message multiple times,
             // it will discard duplicates
-            unreliableSend(address, port,
-                    new Message(this.node.getId(), link.updateAck(message.getMessageId()), Message.Type.ACK, new ArrayList<>()));
+            try { // this will never error
+                var address = InetAddress.getByName(recLink.getSourceNodeConfig().getHostname());
+                var port = recLink.getSourceNodeConfig().getPort();
+                unreliableSend(address, port, new Message(this.config.getId(), message.getMessageId(), Message.Type.ACK, new ArrayList<>()));
+            } catch(UnknownHostException e) {
+                throw new LedgerException(ErrorMessage.NoSuchNode);
+            }
             return message;
         }
         message.setType(Message.Type.IGNORE);
         return message;
-    }
-
-    class SimplexLink {
-        private int lastAck = 0;
-
-        public SimplexLink() {}
-
-        public boolean isExpected(int seq) {
-            synchronized (this) {
-                return (lastAck + 1) == seq;
-            }
-        }
-
-        public boolean isPast(int seq) {
-            synchronized (this) {
-                return lastAck >= seq;
-            }
-        }
-
-        public int updateAck(int seq) {
-            synchronized (this) {
-                if ((lastAck + 1) == seq) lastAck++;
-                return lastAck;
-            }
-        }
     }
 }

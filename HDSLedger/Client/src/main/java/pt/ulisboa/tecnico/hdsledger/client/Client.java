@@ -11,6 +11,7 @@ public class Client {
     public static void main(String[] args) {
 
         final Scanner scanner = new Scanner(System.in);
+        final Library library = new Library();
 
         while (true) {
             System.out.printf("%n> ");
@@ -55,9 +56,9 @@ public class Client {
                     }
                 }
                 case "write" -> {
-                    if (tokens.length == 1) {
-                        System.out.println("Writing to blockchain...");
-                        System.out.println(tokens[1]);
+                    if (tokens.length == 2){
+                        System.out.println("Writing " + tokens[1] + " to blockchain...");
+                        library.append(tokens[1]);
                     } else {
                         System.err.println("Wrong number of arguments (1 required).");
                     }

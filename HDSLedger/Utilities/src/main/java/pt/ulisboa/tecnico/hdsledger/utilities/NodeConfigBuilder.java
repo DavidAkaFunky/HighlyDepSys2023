@@ -13,27 +13,32 @@ public class NodeConfigBuilder {
 
     private final NodeConfig instance = new NodeConfig();
 
-    public NodeConfig setHostname(String hostname) {
+    public NodeConfigBuilder setHostname(String hostname) {
         instance.setHostname(hostname);
-        return instance;
+        return this;
     }
 
-    public NodeConfig setLeader(boolean isLeader) {
+    public NodeConfigBuilder setLeader(boolean isLeader) {
         instance.setLeader(isLeader);
-        return instance;
+        return this;
     }
 
-    public NodeConfig setPort(int port) {
+    public NodeConfigBuilder setPort(int port) {
         instance.setPort(port);
-        return instance;
+        return this;
     }
 
-    public NodeConfig setId(String id) {
+    public NodeConfigBuilder setId(String id) {
         instance.setId(id);
-        return instance;
+        return this;
     }
 
-    public NodeConfig get() {
+    public NodeConfigBuilder setClientPort(int port) {
+        instance.setClientPort(port);
+        return this;
+    }
+
+    public NodeConfig build() {
         return instance;
     }
 

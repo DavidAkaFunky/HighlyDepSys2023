@@ -5,7 +5,9 @@ public enum ErrorMessage {
     ConfigFileFormat("The configuration file has wrong syntax"),
     NoSuchNode("Can't send a message to a non existing node"),
     SocketSendingError("Error while sending message"),
-    CannotOpenSocket("Error while opening socket");
+    SocketReceivingError("Error while receiving message"),
+    CannotOpenSocket("Error while opening socket"),
+    CannotParseMessage("Error while parsing received message");
 
     private final String message;
 

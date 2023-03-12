@@ -6,13 +6,7 @@ public class NodeConfig {
     private String id = "id";
     private int port = 0;
 
-    public NodeConfig() {}
-
-    public NodeConfig(String id, String hostname, int port) {
-        this.id = id;
-        this.hostname = hostname;
-        this.port = port;
-    }
+    private int clientPort = 0;
 
     public boolean isLeader() {
         return isLeader;
@@ -44,5 +38,13 @@ public class NodeConfig {
 
     protected void setLeader(boolean leader) {
         this.isLeader = leader;
+    }
+
+    public int getClientPort() {
+        return clientPort;
+    }
+
+    protected void setClientPort(int clientPort) {
+        this.clientPort = clientPort;
     }
 }

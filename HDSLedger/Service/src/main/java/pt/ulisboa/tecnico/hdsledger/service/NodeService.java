@@ -3,19 +3,23 @@ package pt.ulisboa.tecnico.hdsledger.service;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Timer;
-import java.util.TimerTask;
+// import java.util.TimerTask;
 import java.util.concurrent.ConcurrentLinkedQueue;
-
-
 import java.util.concurrent.ConcurrentHashMap;
 
-public class NodeService {
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+public class NodeService implements UDPService {
+
+    private static final Logger LOGGER = Logger.getLogger(NodeService.class.getName());
 
     // Store strings
     private final Queue<String> blockchain = new ConcurrentLinkedQueue<>();
@@ -57,22 +61,22 @@ public class NodeService {
         return blockchain;
     }
 
+    public void printBlockchain() {
+        LOGGER.log(Level.INFO, "Blockchain from node {0}", nodeId);
+        LOGGER.log(Level.INFO, "Blockchain from " + nodeId + ": ");
+        getBlockchain().forEach((x) -> LOGGER.log(Level.INFO, x + " "));
+    }
+
     // BIG TODO: What needs to be synchronized?
 
     /*
      * 
      */
-    public void startConsensus(Message message) {
+    public void startConsensus(String inputValue) {
 
         // Set initial consensus values
-        int consensusInstance = Integer.parseInt(message.getArgs().get(0));
 
-        if (this.instanceInfo.containsKey(consensusInstance)) {
-            return; // Already started consensus for this instance
-        }
-
-        String inputValue = message.getArgs().get(1);
-        this.consensusInstance = consensusInstance;
+        this.consensusInstance = consensusInstance++;
         this.instanceInfo.put(this.consensusInstance, new InstanceInfo(inputValue));
 
         // Leader broadcasts PRE-PREPARE message
@@ -89,15 +93,18 @@ public class NodeService {
         }
 
         // Start timer (not needed for now)
-        /* timer.schedule(
-            new TimerTask() {
-                @Override
-                public void run() {
-                    System.out.println("Timer ran in startConsensus, trigger round change");
-                }
-            },
-            0,
-            TIMER_PERIOD); */
+        /*
+         * timer.schedule(
+         * new TimerTask() {
+         * 
+         * @Override
+         * public void run() {
+         * System.out.println("Timer ran in startConsensus, trigger round change");
+         * }
+         * },
+         * 0,
+         * TIMER_PERIOD);
+         */
     }
 
     /*
@@ -125,11 +132,11 @@ public class NodeService {
         int round = Integer.parseInt(message.getArgs().get(1));
         String value = message.getArgs().get(2);
 
-        if (justifyPrePrepare(consensusInstance, round, value)){
+        if (justifyPrePrepare(consensusInstance, round, value)) {
             Message prepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PREPARE, message.getArgs());
             this.link.broadcast(prepareMessage);
         }
-        
+
     }
 
     /*
@@ -179,20 +186,92 @@ public class NodeService {
         Optional<String> preparedValue = commitMessages.hasValidQuorum(consensusInstance, round);
         if (preparedValue.isPresent()) {
             // this.timer.cancel(); // Not needed for now
-            // this.consensusInstance and this.preparedValue will always be the same as the ones in the message
+            // this.consensusInstance and this.preparedValue will always be the same as the
+            // ones in the message
             // Decide(this.consensusInstance, this.preparedValue, Quorum (why?) )
 
-            // Add block to blockchain 
-            while(blockchain.size() < consensusInstance) {
-                this.addBlock(preparedValue.get());
+            // Add block to blockchain
+            // TODO: FIX ACTIVE WAITING
+            while (blockchain.size() < consensusInstance);
+            this.addBlock(preparedValue.get());
+            synchronized(this){
+                printBlockchain();
             }
-            
         }
     }
 
     private boolean justifyPrePrepare(int consensusInstance, int round, String value) {
-        // TODO: There is no round change, so this is a primitive version of the check
+        // TODO: There is no round change, so this is a primitive version of the jusitification
         return round == 1;
+    }
+
+    @Override
+    public void listen() {
+        try {
+            // Thread to listen on every request
+            // This is not thread safe but it's okay because
+            // a client only sends one request at a time
+            // thread listening for client requests on clientPort {Append, Read}
+            new Thread(() -> {
+                try {
+                    while (true) {
+                        Message message = link.receive();
+                        String id = message.getSenderId();
+                        // Separate thread to handle each message
+                        new Thread(() -> {
+                            switch (message.getType()) {
+
+                                case PRE_PREPARE -> {
+                                    LOGGER.log(Level.INFO, "{0} - Received PRE-PREPARE message from {1}",
+                                            new Object[] { id, message.getSenderId() });
+                                    uponPrePrepare(message);
+                                }
+
+                                case PREPARE -> {
+                                    LOGGER.log(Level.INFO, "{0} - Received PREPARE message from {1}",
+                                            new Object[] { id, message.getSenderId() });
+                                    uponPrepare(message);
+                                }
+
+                                case COMMIT -> {
+                                    LOGGER.log(Level.INFO, "{0} - Received COMMIT message from {1}",
+                                            new Object[] { id, message.getSenderId() });
+                                    uponCommit(message);
+                                }
+
+                                case ROUND_CHANGE -> {
+                                    LOGGER.log(Level.INFO, "{0} - Received ROUND-CHANGE message from {1}",
+                                            new Object[] { id, message.getSenderId() });
+                                    // stage 2
+                                }
+
+                                case ACK -> {
+                                    LOGGER.log(Level.INFO, "{0} - Received ACK message from {1}",
+                                            new Object[] { id, message.getSenderId() });
+                                    // ignore
+                                }
+
+                                case IGNORE -> {
+                                    LOGGER.log(Level.INFO, "{0} - Received IGNORE message from {1}",
+                                            new Object[] { id, message.getSenderId() });
+                                    // ignore
+                                }
+
+                                default -> {
+                                    LOGGER.log(Level.INFO, "{0} - Received unknown message from {1}",
+                                            new Object[] { id, message.getSenderId() });
+                                    // ignore
+                                }
+                            }
+                        }).start();
+                    }
+                } catch (IOException | ClassNotFoundException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
 }
