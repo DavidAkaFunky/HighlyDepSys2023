@@ -17,14 +17,15 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.logging.Level;
-import java.util.logging.Logger;
+import java.util.stream.Collector;
+import java.util.stream.Collectors;
 
 public class NodeService implements UDPService {
 
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
 
     // Store strings
-    private final Queue<String> blockchain = new ConcurrentLinkedQueue<>();
+    private final Map<Integer, String> blockchain = new ConcurrentHashMap<>();
 
     private boolean isLeader;
     // TODO: Devia ser o PerfectLink a meter o counter na message ?
@@ -55,17 +56,34 @@ public class NodeService implements UDPService {
         this.commitMessages = new MessageBucket(nodeCount);
     }
 
-    public void addBlock(String block) {
-        blockchain.add(block);
+    public void addBlock(int instance, String block) {
+        blockchain.put(instance, block);
     }
 
-    public Queue<String> getBlockchain() {
+    public Map<Integer, String> getBlockchain() {
         return blockchain;
+    }
+
+    public List<String> getBlockchainAsList() {
+        return new ArrayList<>(blockchain.values());
     }
 
     public void printBlockchain() {
         LOGGER.log(Level.INFO, MessageFormat.format("Blockchain from node {0}", nodeId));
-        getBlockchain().forEach((x) -> LOGGER.log(Level.INFO, x + " "));
+        getBlockchain().values().forEach((x) -> LOGGER.log(Level.INFO, x + " "));
+    }
+
+    public int getConsensusInstance() {
+        return consensusInstance;
+    }
+
+    public List<String> getBlockchainStartingAtInstance(int startInstance) {
+        return getBlockchain()
+                .entrySet()
+                .stream()
+                .filter((Map.Entry<Integer, String> entry) -> (entry.getKey() >= startInstance))
+                .map(Map.Entry::getValue)
+                .collect(Collectors.toList());
     }
 
     // BIG TODO: What needs to be synchronized?
@@ -73,7 +91,7 @@ public class NodeService implements UDPService {
     /*
      * 
      */
-    public void startConsensus(String inputValue) {
+    public int startConsensus(String inputValue) {
 
         // Set initial consensus values
 
@@ -91,7 +109,12 @@ public class NodeService implements UDPService {
             Message prePrepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PRE_PREPARE, messageArgs);
 
             this.link.broadcast(prePrepareMessage);
+        } else {
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "Node {0} is not leader, waiting for PRE-PREPARE message - THIS SHOULD NOT HAPPEN!", nodeId));
         }
+
+        return this.consensusInstance;
 
         // Start timer (not needed for now)
         /*
@@ -133,6 +156,11 @@ public class NodeService implements UDPService {
         int round = Integer.parseInt(message.getArgs().get(1));
         String value = message.getArgs().get(2);
 
+        LOGGER.log(Level.INFO,
+                MessageFormat.format(
+                        "{0} - Received PRE-PREPARE message from {1}: Consensus Instance {2}, Round {3}, Value {4}",
+                        nodeId, message.getSenderId(), consensusInstance, round, value));
+
         if (justifyPrePrepare(consensusInstance, round, value)) {
             Message prepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PREPARE, message.getArgs());
             this.link.broadcast(prepareMessage);
@@ -148,13 +176,18 @@ public class NodeService implements UDPService {
         int round = Integer.parseInt(message.getArgs().get(1));
         String value = message.getArgs().get(2);
 
+        LOGGER.log(Level.INFO,
+                MessageFormat.format(
+                        "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}, Value {4}",
+                        nodeId, message.getSenderId(), consensusInstance, round, value));
+
         prepareMessages.addMessage(consensusInstance, round, value);
 
         InstanceInfo instance = this.instanceInfo.get(consensusInstance);
-        
+
         // Find value with valid quorum
         Optional<String> preparedValue = prepareMessages.hasValidQuorum(consensusInstance, round);
-        if (preparedValue.isPresent() && (instance == null || instance.getPreparedRound() < round) ) {
+        if (preparedValue.isPresent() && (instance == null || instance.getPreparedRound() < round)) {
 
             // Set instance values
             this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
@@ -183,6 +216,11 @@ public class NodeService implements UDPService {
         int round = Integer.parseInt(message.getArgs().get(1));
         String value = message.getArgs().get(2);
 
+        LOGGER.log(Level.INFO,
+                MessageFormat.format(
+                        "{0} - Received COMMIT message from {1}: Consensus Instance {2}, Round {3}, Value {4}",
+                        nodeId, message.getSenderId(), consensusInstance, round, value));
+
         commitMessages.addMessage(consensusInstance, round, value);
 
         InstanceInfo instance = this.instanceInfo.get(consensusInstance);
@@ -202,17 +240,24 @@ public class NodeService implements UDPService {
                     e.printStackTrace();
                 }
             }
-            
+
             // Very weird if it's absent
             this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
-            this.addBlock(committedValue.get());
-            synchronized (this) {
-                printBlockchain();
-            }
+            this.addBlock(consensusInstance, committedValue.get());
         }
+    }
+
+    void uponRoundChange(Message message) {
+        int consensusInstance = Integer.parseInt(message.getArgs().get(0));
+        int round = Integer.parseInt(message.getArgs().get(1));
+
+        LOGGER.log(Level.INFO,
+                MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, New Round {3}",
+                        nodeId, message.getSenderId(), consensusInstance, round));
+        // stage 2
     }
 
     private boolean justifyPrePrepare(int consensusInstance, int round, String value) {
@@ -232,57 +277,44 @@ public class NodeService implements UDPService {
                 try {
                     while (true) {
                         Message message = link.receive();
-                        String id = message.getSenderId();
                         // Separate thread to handle each message
                         new Thread(() -> {
                             switch (message.getType()) {
 
                                 case PRE_PREPARE -> {
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received PRE-PREPARE message from {1}",
-                                                    nodeId, id));
                                     uponPrePrepare(message);
                                 }
 
                                 case PREPARE -> {
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received PREPARE message from {1}",
-                                                    nodeId, id));
                                     uponPrepare(message);
                                 }
 
                                 case COMMIT -> {
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received COMMIT message from {1}",
-                                                    nodeId, id));
                                     uponCommit(message);
                                 }
 
                                 case ROUND_CHANGE -> {
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}",
-                                                    nodeId, id));
-                                    // stage 2
+                                    uponRoundChange(message);
                                 }
 
                                 case ACK -> {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received ACK message from {1}",
-                                                    nodeId, id));
+                                                    nodeId, message.getSenderId()));
                                     // ignore
                                 }
 
                                 case IGNORE -> {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received IGNORE message from {1}",
-                                                    nodeId, id));
+                                                    nodeId, message.getSenderId()));
                                     // ignore
                                 }
 
                                 default -> {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received unknown message from {1}",
-                                                    nodeId, id));
+                                                    nodeId, message.getSenderId()));
                                     // ignore
                                 }
                             }

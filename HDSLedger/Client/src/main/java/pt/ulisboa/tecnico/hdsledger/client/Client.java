@@ -1,6 +1,8 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
 import pt.ulisboa.tecnico.hdsledger.library.Library;
+
+import java.util.List;
 import java.util.Scanner;
 
 public class Client {
@@ -26,14 +28,16 @@ public class Client {
                 case "write" -> {
                     if (tokens.length == 2) {
                         System.out.println("Writing " + tokens[1] + " to blockchain...");
-                        library.append(tokens[1]);
+                        List<String> blockchainValues = library.append(tokens[1]);
+                        library.printNewBlockchainValues(blockchainValues);
                     } else {
                         System.err.println("Wrong number of arguments (1 required).");
                     }
                 }
                 case "read" -> {
                     System.out.println("Reading blockchain...");
-
+                    library.read();
+                    library.printBlockchain();
                 }
                 case "exit" -> {
                     System.out.println("Exiting...");

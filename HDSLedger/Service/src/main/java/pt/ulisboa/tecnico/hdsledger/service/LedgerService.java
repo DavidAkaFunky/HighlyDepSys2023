@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
@@ -12,6 +13,10 @@ import java.text.MessageFormat;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,7 +30,7 @@ public class LedgerService implements UDPService {
 
     // processos simples para identificar cada pedido: cliente calcula hash de
     // mensagem + timestamp + ip do cliente
-    private final Set<String> nonces = ConcurrentHashMap.newKeySet();
+    private final Map<String, Set<Integer>> clientRequests = new ConcurrentHashMap<>();
     private static final CustomLogger LOGGER = new CustomLogger(LedgerService.class.getName());
     private Thread thread;
 
@@ -34,18 +39,39 @@ public class LedgerService implements UDPService {
         this.service = service;
     }
 
-    public void handleAppendRequest(String arg) {
-        // TODO: REPLACE arg WITH NONCE AND CHECK IF IT IS VALID
-        boolean isNew = nonces.add(arg);
-
-        if (isNew) {
-            service.startConsensus(arg);
-        }
-
+    public Optional<LedgerResponse> handleAppendRequest(InetAddress clientAddress, int clientPort, int clientSeq, String value) {
+        return requestConsensus(clientAddress, clientPort, clientSeq, value);
     }
 
-    public void handleReadRequest() {
+    public Optional<LedgerResponse> handleReadRequest(InetAddress clientAddress, int clientPort, int clientSeq) {
+        return requestConsensus(clientAddress, clientPort, clientSeq, "");
+    }
 
+    public Optional<LedgerResponse> requestConsensus(InetAddress clientAddress, int clientPort, int clientSeq, String value) {
+        String hostPort = clientAddress.toString() + clientPort;
+        clientRequests.putIfAbsent(hostPort, ConcurrentHashMap.newKeySet());
+        boolean isNewMessage = clientRequests.get(hostPort).add(clientSeq);
+        
+        if (isNewMessage) {
+            int consensusInstance = service.startConsensus(value);
+            //service.requestNewBlocks(latestInstanceKnownByClient);
+            for (;;) {
+                Map<Integer, String> blockchain = service.getBlockchain();
+                if (blockchain.size() >= consensusInstance)
+                break;
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            if (value.equals(""))
+                return Optional.of(new LedgerResponse(consensusInstance, service.getBlockchainAsList()));
+            else
+                return Optional.of(new LedgerResponse(consensusInstance, service.getBlockchainStartingAtInstance(consensusInstance)));
+        }
+        return Optional.empty();
     }
 
     public Thread getThread() {
@@ -75,7 +101,7 @@ public class LedgerService implements UDPService {
                 DatagramPacket packet = new DatagramPacket(new byte[1024], 1024);
 
                 LOGGER.log(Level.INFO, MessageFormat.format("{0} - Started LedgerService on {1}:{2}",
-                        config.getId(), address, port ));
+                        config.getId(), address, port));
 
                 for (;;) {
 
@@ -96,29 +122,33 @@ public class LedgerService implements UDPService {
                             try {
 
                                 // Deserialize client request
-                                LedgerMessage message = new Gson().fromJson(new String(buffer), LedgerMessage.class);
-
+                                LedgerRequest message = new Gson().fromJson(new String(buffer), LedgerRequest.class);
+                                Optional<LedgerResponse> response;
                                 // Handle client request
                                 switch (message.getType()) {
                                     case APPEND -> {
                                         // TODO falta sacar resposta
-                                        handleAppendRequest(message.getArg());
+                                        response = handleAppendRequest(clientAddress, clientPort, message.getClientSeq(), message.getArg());
                                         break;
                                     }
                                     case READ -> {
-                                        handleReadRequest();
+                                        response = handleReadRequest(clientAddress, clientPort, message.getClientSeq());
                                         break;
                                     }
                                     default -> {
                                         throw new LedgerException(ErrorMessage.CannotParseMessage);
                                     }
                                 }
-                                // TODO buffer is not the response, it's the request
-                                DatagramPacket response = new DatagramPacket(buffer, buffer.length, clientAddress,
-                                        clientPort);
+
+                                if (response.isEmpty()) {
+                                    return;
+                                }
+                                
+                                byte[] jsonBytes = new Gson().toJson(response).getBytes();
+                                DatagramPacket packet = new DatagramPacket(jsonBytes, jsonBytes.length, address, port);
 
                                 // Reply to client
-                                socket.send(response);
+                                socket.send(packet);
 
                             } catch (IOException | JsonSyntaxException e) {
                                 socket.close();
