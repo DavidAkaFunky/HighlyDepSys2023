@@ -17,20 +17,23 @@ public class Client {
 
     public static void main(String[] args) {
 
+        // Command line arguments
         final String clientId = args[0];
 
-        final Scanner scanner = new Scanner(System.in);
-
+        // Get all the client configs
         ClientConfig[] configs = new ClientConfigBuilder().fromFile(configPath);
-
+        
+        // Get the client config
         Optional<ClientConfig> clientConfig = Arrays.stream(configs).filter(c -> c.getId().equals(clientId)).findFirst();
-
-        if (clientConfig.isEmpty())
+        if (clientConfig.isEmpty()){
             throw new LedgerException(ErrorMessage.ConfigFileFormat);
-
+        }
         ClientConfig config = clientConfig.get();
-
+        
+        // Library to interact with the blockchain
         final Library library = new Library(config);
+        
+        final Scanner scanner = new Scanner(System.in);
 
         while (true) {
             System.out.printf("%n> ");
@@ -42,6 +45,7 @@ public class Client {
                 continue;
             }
 
+            // TODO: What if string to be happended has spaces?
             String[] tokens = line.split(" ");
 
             switch (tokens[0]) {
@@ -56,7 +60,7 @@ public class Client {
                 }
                 case "read" -> {
                     System.out.println("Reading blockchain...");
-                    //library.read();
+                    library.read();
                     library.printBlockchain();
                 }
                 case "exit" -> {

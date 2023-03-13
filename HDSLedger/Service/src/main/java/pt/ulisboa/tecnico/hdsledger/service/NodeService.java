@@ -245,9 +245,7 @@ public class NodeService implements UDPService {
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
-            System.out.println("Going to add to blockchain");
             String block = committedValue.get();
-            System.out.println("Block: " + block);
             this.addBlock(consensusInstance, block);
         }
     }

@@ -79,31 +79,33 @@ public class Library {
 
         try {
             Thread sendThread = new Thread(() -> {
-                for (; ; ) {
+                for (;;) {
                     try {
                         InetAddress address = InetAddress.getByName(leader.getHostname());
 
                         int port = leader.getClientPort();
 
-                        // Create UDP packet
+                        // Sign message
                         String jsonString = new Gson().toJson(request);
                         Optional<String> signature;
                         try {
                             signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
-                        } catch (FileNotFoundException e) {
-                            throw new LedgerException(ErrorMessage.ConfigFileNotFound);
                         } catch (Exception e) {
                             e.printStackTrace();
                             throw new RuntimeException();
                         }
 
+                        // Create UDP packet
                         SignedMessage message = new SignedMessage(jsonString, signature.get());
                         byte[] serializedMessage = new Gson().toJson(message).getBytes();
-                        DatagramPacket packet = new DatagramPacket(serializedMessage, serializedMessage.length, address, port);
-                        // Send packet
+                        DatagramPacket packet = new DatagramPacket(serializedMessage, serializedMessage.length, address,
+                                port);
 
+                        // Send packet
                         socket.send(packet);
+
                         Thread.sleep(1000);
+
                     } catch (IOException e) {
                         throw new LedgerException(ErrorMessage.SocketSendingError);
                     } catch (InterruptedException e) {
@@ -118,13 +120,16 @@ public class Library {
             socket.receive(response);
             sendThread.interrupt();
 
-            // Deserialize response
+            
+            // Verify signature
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
             SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
-            if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(), leader.getPublicKeyPath())) {
+            if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
+                    leader.getPublicKeyPath())) {
                 throw new LedgerException(ErrorMessage.SignatureDoesntMatch);
             }
 
+            // Deserialize response
             LedgerResponse ledgerResponse = new Gson().fromJson(responseData.getMessage(), LedgerResponse.class);
 
             // Add new values to the blockchain
@@ -139,31 +144,43 @@ public class Library {
         }
     }
 
-    /* public List<String> read() throws LedgerException {
+    public List<String> read() throws LedgerException {
 
         // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.READ, this.config.getId(), this.clientSeq++,
+        LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.READ, this.config.getId(),
+                this.clientSeq++,
                 "",
                 this.blockchain.size());
 
         try {
             Thread sendThread = new Thread(() -> {
-                for (; ; ) {
+                for (;;) {
                     try {
                         InetAddress address = InetAddress.getByName(leader.getHostname());
 
                         int port = leader.getClientPort();
 
-                        // Create UDP packet
+                        // Sign message
                         String jsonString = new Gson().toJson(request);
-                        String signature = RSAEncryption.sign(jsonString, pathToKey);
-                        SignedMessage message = new SignedMessage(jsonString, signature);
-                        DatagramPacket packet = new DatagramPacket(jsonBytes, jsonBytes.length, address, port);
+                        Optional<String> signature;
+                        try {
+                            signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                            throw new RuntimeException();
+                        }
+
+                        // Create UDP packet
+                        SignedMessage message = new SignedMessage(jsonString, signature.get());
+                        byte[] serializedMessage = new Gson().toJson(message).getBytes();
+                        DatagramPacket packet = new DatagramPacket(serializedMessage, serializedMessage.length, address,
+                                port);
 
                         // Send packet
-
                         socket.send(packet);
+
                         Thread.sleep(1000);
+
                     } catch (IOException e) {
                         throw new LedgerException(ErrorMessage.SocketSendingError);
                     } catch (InterruptedException e) {
@@ -178,19 +195,28 @@ public class Library {
             socket.receive(response);
             sendThread.interrupt();
 
-            // Deserialize response
+            
+            // Verify signature
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
-            LedgerResponse responseData = new Gson().fromJson(new String(buffer), LedgerResponse.class);
+            SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
+            if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
+                    leader.getPublicKeyPath())) {
+                throw new LedgerException(ErrorMessage.SignatureDoesntMatch);
+            }
 
-            // TODO: Only request values from N+1 instance
-            // because we already store the values from N instance
+            // Deserialize response
+            LedgerResponse ledgerResponse = new Gson().fromJson(responseData.getMessage(), LedgerResponse.class);
+
+            // TODO: Only request values from N+1 instance because we already store the values from N instance
+            
             // Add new values to the blockchain
-            List<String> blockchainValues = responseData.getValues();
+            List<String> blockchainValues = ledgerResponse.getValues();
             blockchainValues.forEach((value) -> blockchain.add(value));
 
             return blockchainValues;
+            
         } catch (IOException e) {
             throw new LedgerException(ErrorMessage.CannotOpenSocket);
         }
-    } */
+    }
 }
