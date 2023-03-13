@@ -1,8 +1,12 @@
 [
     {
-        "id": "4"
+        "id": "4",
+        "pathPubKey": "../PKI/client4.pub",
+        "pathPrivKey": "../PKI/client4.priv"
     },
     {
-        "id": "5"
+        "id": "5",
+        "pathPubKey": "../PKI/client5.pub",
+        "pathPrivKey": "../PKI/client5.priv"
     }
 ]

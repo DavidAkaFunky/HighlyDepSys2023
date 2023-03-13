@@ -4,20 +4,35 @@
         "isLeader": true,
         "hostname": "localhost",
         "port": 3000,
-        "clientPort": 4000
+        "clientPort": 4000,
+        "pathPubKey": "",
+        "pathPrivKey": ""
     },
     {
         "id": "2",
         "isLeader": false,
         "hostname": "localhost",
         "port": 3001,
-        "clientPort": 4001
+        "clientPort": 4001,
+        "pathPubKey": "",
+        "pathPrivKey": ""
     },
     {
         "id": "3",
         "isLeader": false,
         "hostname": "localhost",
         "port": 3002,
-        "clientPort": 4002
+        "clientPort": 4002,
+        "pathPubKey": "",
+        "pathPrivKey": ""
+    },
+    {
+        "id": "4",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3003,
+        "clientPort": 4003,
+        "pathPubKey": "",
+        "pathPrivKey": ""
     }
 ]

@@ -1,5 +1,6 @@
 import os
 import json
+import sys
 
 # Compile classes
 os.system("mvn clean install")
@@ -12,8 +13,8 @@ with open("Service/src/main/resources/server_config.json") as f:
         pid = os.fork()
         if pid == 0:
             os.system(
-                f"/usr/bin/kitty sh -c \"cd Service; mvn exec:java -Dexec.args='{key['id']}' && sleep 1000\"")
-            os._exit(0)
+                f"/usr/bin/kitty sh -c \"cd Service; mvn exec:java -Dexec.args='{key['id']}' ; sleep 1000\"")
+            sys.exit()
 
 # Spawn blockchain clients
 with open("Client/src/main/resources/client_config.json") as f:
@@ -23,5 +24,5 @@ with open("Client/src/main/resources/client_config.json") as f:
         pid = os.fork()
         if pid == 0:
             os.system(
-                f"/usr/bin/kitty sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']}' && sleep 1000\"")
-            os._exit(0)
+                f"/usr/bin/kitty sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']}' ; sleep 1000\"")
+            sys.exit()
