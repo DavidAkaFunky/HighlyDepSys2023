@@ -7,12 +7,14 @@ public class LedgerRequest {
     }
 
     protected LedgerRequestType type;
+    protected String clientId;
     protected int clientSeq;
     protected String arg;
     protected int blockchainSize;
 
-    public LedgerRequest(LedgerRequestType type, int clientSeq, String arg, int blockchainSize) {
+    public LedgerRequest(LedgerRequestType type, String clientId, int clientSeq, String arg, int blockchainSize) {
         this.type = type;
+        this.clientId = clientId;
         this.clientSeq = clientSeq;
         this.arg = arg;
         this.blockchainSize = blockchainSize;
@@ -24,6 +26,14 @@ public class LedgerRequest {
 
     public void setType(LedgerRequestType type) {
         this.type = type;
+    }
+
+    public String getClientId() {
+        return clientId;
+    }
+
+    public void setClientId(String clientId) {
+        this.clientId = clientId;
     }
 
     public int getClientSeq() {

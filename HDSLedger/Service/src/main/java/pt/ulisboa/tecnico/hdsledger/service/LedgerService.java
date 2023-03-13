@@ -11,10 +11,7 @@ import java.io.IOException;
 import java.net.*;
 import java.text.MessageFormat;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import java.util.Arrays;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -28,8 +25,6 @@ public class LedgerService implements UDPService {
     private final NodeConfig config;
     private final NodeService service;
 
-    // processos simples para identificar cada pedido: cliente calcula hash de
-    // mensagem + timestamp + ip do cliente
     private final Map<String, Set<Integer>> clientRequests = new ConcurrentHashMap<>();
     private static final CustomLogger LOGGER = new CustomLogger(LedgerService.class.getName());
     private Thread thread;
@@ -39,26 +34,37 @@ public class LedgerService implements UDPService {
         this.service = service;
     }
 
-    public Optional<LedgerResponse> handleAppendRequest(InetAddress clientAddress, int clientPort, int clientSeq, String value) {
-        return requestConsensus(clientAddress, clientPort, clientSeq, value);
+    public Optional<LedgerResponse> handleAppendRequest(String clientId, int clientSeq,
+            String value) {
+        return requestConsensus(clientId, clientSeq, value);
     }
 
-    public Optional<LedgerResponse> handleReadRequest(InetAddress clientAddress, int clientPort, int clientSeq) {
-        return requestConsensus(clientAddress, clientPort, clientSeq, "");
+    public Optional<LedgerResponse> handleReadRequest(String clientId, int clientSeq) {
+        return requestConsensus(clientId, clientSeq, "");
     }
 
-    public Optional<LedgerResponse> requestConsensus(InetAddress clientAddress, int clientPort, int clientSeq, String value) {
-        String hostPort = clientAddress.toString() + clientPort;
-        clientRequests.putIfAbsent(hostPort, ConcurrentHashMap.newKeySet());
-        boolean isNewMessage = clientRequests.get(hostPort).add(clientSeq);
-        
+    public Optional<LedgerResponse> requestConsensus(String clientId, int clientSeq, String value) {
+
+        // Check if client has already sent this request
+        clientRequests.putIfAbsent(clientId, ConcurrentHashMap.newKeySet());
+        System.out.println("VALUE ALREADY EXISTS: " + clientRequests.get(clientId).contains(clientSeq));
+        boolean isNewMessage = clientRequests.get(clientId).add(clientSeq);
+
+        LOGGER.log(Level.INFO, "Request for consensus");
+
         if (isNewMessage) {
+
+            System.out.println("client sequence:" + clientSeq);
+            LOGGER.log(Level.INFO, "Starting consensus");
+
+            // Start consensus instance
             int consensusInstance = service.startConsensus(value);
-            //service.requestNewBlocks(latestInstanceKnownByClient);
+            // service.requestNewBlocks(latestInstanceKnownByClient);
             for (;;) {
+                // Wait for consensus to finish
                 Map<Integer, String> blockchain = service.getBlockchain();
                 if (blockchain.size() >= consensusInstance)
-                break;
+                    break;
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
@@ -66,11 +72,18 @@ public class LedgerService implements UDPService {
                 }
             }
 
+            System.out.println("Consensus finished");
+            System.out.println(service.getBlockchain().values());
+            System.out.println(service.getBlockchainAsList());
+            System.out.println(service.getBlockchainStartingAtInstance(consensusInstance));
+
             if (value.equals(""))
                 return Optional.of(new LedgerResponse(consensusInstance, service.getBlockchainAsList()));
             else
-                return Optional.of(new LedgerResponse(consensusInstance, service.getBlockchainStartingAtInstance(consensusInstance)));
+                return Optional.of(new LedgerResponse(consensusInstance,
+                        service.getBlockchainStartingAtInstance(consensusInstance)));
         }
+
         return Optional.empty();
     }
 
@@ -97,13 +110,14 @@ public class LedgerService implements UDPService {
                 InetAddress address = InetAddress.getByName(config.getHostname());
                 DatagramSocket socket = new DatagramSocket(port, address);
 
-                // Packet to receive client requests
-                DatagramPacket packet = new DatagramPacket(new byte[1024], 1024);
-
                 LOGGER.log(Level.INFO, MessageFormat.format("{0} - Started LedgerService on {1}:{2}",
                         config.getId(), address, port));
 
                 for (;;) {
+
+                    // Packet to receive client requests
+                    // TODO: Can this be moved outside the loop?
+                    DatagramPacket packet = new DatagramPacket(new byte[1024], 1024);
 
                     // Receive client request
                     socket.receive(packet);
@@ -120,19 +134,18 @@ public class LedgerService implements UDPService {
                         @Override
                         public void run() {
                             try {
-
                                 // Deserialize client request
                                 LedgerRequest message = new Gson().fromJson(new String(buffer), LedgerRequest.class);
+
                                 Optional<LedgerResponse> response;
                                 // Handle client request
                                 switch (message.getType()) {
                                     case APPEND -> {
-                                        // TODO falta sacar resposta
-                                        response = handleAppendRequest(clientAddress, clientPort, message.getClientSeq(), message.getArg());
+                                        response = handleAppendRequest(message.getClientId(), message.getClientSeq(), message.getArg());
                                         break;
                                     }
                                     case READ -> {
-                                        response = handleReadRequest(clientAddress, clientPort, message.getClientSeq());
+                                        response = handleReadRequest(message.getClientId(), message.getClientSeq());
                                         break;
                                     }
                                     default -> {
@@ -143,9 +156,14 @@ public class LedgerService implements UDPService {
                                 if (response.isEmpty()) {
                                     return;
                                 }
-                                
-                                byte[] jsonBytes = new Gson().toJson(response).getBytes();
-                                DatagramPacket packet = new DatagramPacket(jsonBytes, jsonBytes.length, address, port);
+
+                                LedgerResponse ledgerResponse = response.get();
+                                System.out.println("Ledger response: " + ledgerResponse);
+                                System.out.println(ledgerResponse.getConsensusInstance());
+                                System.out.println(ledgerResponse.getValues());
+
+                                byte[] jsonBytes = new Gson().toJson(response.get()).getBytes();
+                                DatagramPacket packet = new DatagramPacket(jsonBytes, jsonBytes.length, clientAddress, clientPort);
 
                                 // Reply to client
                                 socket.send(packet);

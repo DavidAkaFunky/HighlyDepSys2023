@@ -5,11 +5,23 @@ import json
 os.system("mvn clean install")
 
 # Spawn blockchain nodes
-with open("Service/src/main/resources/config.json") as f:
+with open("Service/src/main/resources/server_config.json") as f:
     data = json.load(f)
     processes = list()
     for key in data:
         pid = os.fork()
         if pid == 0:
-            os.system(f"/usr/bin/kitty sh -c \"cd Service; mvn exec:java -Dexec.args='{key['id']}' && sleep 1000\"")
+            os.system(
+                f"/usr/bin/kitty sh -c \"cd Service; mvn exec:java -Dexec.args='{key['id']}' && sleep 1000\"")
+            os._exit(0)
+
+# Spawn blockchain clients
+with open("Client/src/main/resources/client_config.json") as f:
+    data = json.load(f)
+    processes = list()
+    for key in data:
+        pid = os.fork()
+        if pid == 0:
+            os.system(
+                f"/usr/bin/kitty sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']}' && sleep 1000\"")
             os._exit(0)

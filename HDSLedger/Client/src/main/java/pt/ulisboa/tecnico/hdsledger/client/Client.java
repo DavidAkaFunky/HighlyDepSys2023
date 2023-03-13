@@ -9,8 +9,10 @@ public class Client {
 
     public static void main(String[] args) {
 
+        final String clientId = args[0];
+
         final Scanner scanner = new Scanner(System.in);
-        final Library library = new Library();
+        final Library library = new Library(clientId);
 
         while (true) {
             System.out.printf("%n> ");

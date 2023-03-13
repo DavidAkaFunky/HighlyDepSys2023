@@ -10,14 +10,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Queue;
 import java.util.Timer;
 // import java.util.TimerTask;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.logging.Level;
-import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
 public class NodeService implements UDPService {
@@ -69,8 +66,7 @@ public class NodeService implements UDPService {
     }
 
     public void printBlockchain() {
-        LOGGER.log(Level.INFO, MessageFormat.format("Blockchain from node {0}", nodeId));
-        getBlockchain().values().forEach((x) -> LOGGER.log(Level.INFO, x + " "));
+        LOGGER.log(Level.INFO, MessageFormat.format("Blockchain from node {0}: {1}", nodeId, getBlockchain().values()));
     }
 
     public int getConsensusInstance() {
@@ -93,9 +89,12 @@ public class NodeService implements UDPService {
      */
     public int startConsensus(String inputValue) {
 
-        // Set initial consensus values
+        //NOTE: Client is only sending  request to leader
+        // Meaning that other nodes will not set consensusInstance
+        
 
-        this.consensusInstance = consensusInstance++;
+        // Set initial consensus values
+        this.consensusInstance++;
         this.instanceInfo.put(this.consensusInstance, new InstanceInfo(inputValue));
 
         // Leader broadcasts PRE-PREPARE message
@@ -197,7 +196,7 @@ public class NodeService implements UDPService {
 
             // Prepare message to broadcast
             List<String> messageArgs = new ArrayList<>();
-            messageArgs.add(String.valueOf(this.consensusInstance));
+            messageArgs.add(String.valueOf(consensusInstance));
             messageArgs.add(String.valueOf(instance.getCurrentRound()));
             messageArgs.add(instance.getPreparedValue());
 
@@ -233,7 +232,7 @@ public class NodeService implements UDPService {
             // Decide(this.consensusInstance, this.preparedValue, Quorum (why?) )
 
             // Add block to blockchain
-            while (blockchain.size() < consensusInstance) {
+            while (blockchain.size() < consensusInstance - 1) {
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
@@ -246,7 +245,10 @@ public class NodeService implements UDPService {
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
-            this.addBlock(consensusInstance, committedValue.get());
+            System.out.println("Going to add to blockchain");
+            String block = committedValue.get();
+            System.out.println("Block: " + block);
+            this.addBlock(consensusInstance, block);
         }
     }
 

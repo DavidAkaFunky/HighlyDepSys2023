@@ -15,7 +15,7 @@ import java.util.logging.Level;
 public class Node {
 
     private static final CustomLogger LOGGER = new CustomLogger(Node.class.getName());
-    private static final String CONFIG = "src/main/resources/config.json";
+    private static final String CONFIG = "src/main/resources/server_config.json";
 
     public static void main(String[] args) {
         
