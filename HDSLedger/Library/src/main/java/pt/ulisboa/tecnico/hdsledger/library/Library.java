@@ -3,24 +3,17 @@ package pt.ulisboa.tecnico.hdsledger.library;
 import com.google.gson.Gson;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
-import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
-import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
-import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
-import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfigBuilder;
+import pt.ulisboa.tecnico.hdsledger.communication.SignedMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.*;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
-import java.net.SocketTimeoutException;
-import java.net.UnknownHostException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class Library {
 
@@ -30,21 +23,21 @@ public class Library {
     // Config details of node leader
     private final NodeConfig leader;
     // Known blockchain
-    private final Map<Integer, String> blockchain = new ConcurrentHashMap<>();
+    private final List<String> blockchain = new ArrayList<>();
     // Client identifier
-    private String clientId;
+    private final ClientConfig config;
+    // Client socket
+    private final DatagramSocket socket;
     // Message sequence number
     private int clientSeq = 1;
-    // Client socket
-    private DatagramSocket socket;
 
-    public Library(String clientId) throws LedgerException {
+    public Library(ClientConfig clientConfig) throws LedgerException {
         try {
             this.socket = new DatagramSocket();
         } catch (SocketException e) {
             throw new LedgerException(ErrorMessage.CannotOpenSocket);
         }
-        this.clientId = clientId;
+        this.config = clientConfig;
         // Get leader from config file
         Optional<NodeConfig> leader = Arrays.stream(new NodeConfigBuilder().fromFile(CONFIG))
                 .filter(NodeConfig::isLeader).findFirst();
@@ -53,7 +46,7 @@ public class Library {
         this.leader = leader.get();
     }
 
-    public Map<Integer, String> getBlockchain() {
+    public List<String> getBlockchain() {
         return blockchain;
     }
 
@@ -66,7 +59,7 @@ public class Library {
 
     /*
      * Print the new blockchain content
-     * 
+     *
      * @param blockchainValues the new blockchain content
      */
     public void printNewBlockchainValues(List<String> blockchainValues) {
@@ -76,27 +69,38 @@ public class Library {
     /*
      * Append a value to the blockchain
      * This method is intentionally blocking
-     * 
+     *
      * @param value the value to be appended
      */
     public List<String> append(String value) throws LedgerException {
 
         // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.APPEND, this.clientId,
+        LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.APPEND, this.config.getId(),
                 this.clientSeq++, value, this.blockchain.size());
 
         try {
             Thread sendThread = new Thread(() -> {
-                for (;;) {
+                for (; ; ) {
                     try {
                         InetAddress address = InetAddress.getByName(leader.getHostname());
 
                         int port = leader.getClientPort();
 
                         // Create UDP packet
-                        byte[] jsonBytes = new Gson().toJson(request).getBytes();
-                        DatagramPacket packet = new DatagramPacket(jsonBytes, jsonBytes.length, address, port);
+                        String jsonString = new Gson().toJson(request);
+                        Optional<String> signature;
+                        try {
+                            signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
+                        } catch (FileNotFoundException e) {
+                            throw new LedgerException(ErrorMessage.ConfigFileNotFound);
+                        } catch (Exception e) {
+                            // sorry DM
+                            throw new RuntimeException();
+                        }
 
+                        SignedMessage message = new SignedMessage(jsonString, signature.get());
+                        byte[] serializedMessage = new Gson().toJson(message).getBytes();
+                        DatagramPacket packet = new DatagramPacket(serializedMessage, serializedMessage.length, address, port);
                         // Send packet
 
                         socket.send(packet);
@@ -117,14 +121,17 @@ public class Library {
 
             // Deserialize response
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
-            LedgerResponse responseData = new Gson().fromJson(new String(buffer), LedgerResponse.class);
+            SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
+            if (RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(), leader.getPublicKeyPath())) {
+                throw new LedgerException(ErrorMessage.SignatureDoesntMatch);
+            }
+
+            LedgerResponse ledgerResponse = new Gson().fromJson(responseData.getMessage(), LedgerResponse.class);
 
             // Add new values to the blockchain
-            List<String> blockchainValues = responseData.getValues();
-            int currrentBlockchainSize = blockchain.size();
-            for (String blockchainValue : blockchainValues) {
-                blockchain.put(++currrentBlockchainSize, blockchainValue);
-            }
+            List<String> blockchainValues = ledgerResponse.getValues();
+
+            blockchain.addAll(ledgerResponse.getValues().stream().toList());
 
             return blockchainValues;
 
@@ -136,20 +143,22 @@ public class Library {
     public List<String> read() throws LedgerException {
 
         // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.READ, this.clientId, this.clientSeq++,
+        LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.READ, this.config, this.clientSeq++,
                 "",
                 this.blockchain.size());
 
         try {
             Thread sendThread = new Thread(() -> {
-                for (;;) {
+                for (; ; ) {
                     try {
                         InetAddress address = InetAddress.getByName(leader.getHostname());
 
                         int port = leader.getClientPort();
 
                         // Create UDP packet
-                        byte[] jsonBytes = new Gson().toJson(request).getBytes();
+                        String jsonString = new Gson().toJson(request);
+                        String signature = RSAEncryption.sign(jsonString, pathToKey);
+                        SignedMessage message = new SignedMessage(jsonString, signature);
                         DatagramPacket packet = new DatagramPacket(jsonBytes, jsonBytes.length, address, port);
 
                         // Send packet

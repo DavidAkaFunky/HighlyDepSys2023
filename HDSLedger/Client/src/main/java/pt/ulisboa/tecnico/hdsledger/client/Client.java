@@ -1,18 +1,36 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
 import pt.ulisboa.tecnico.hdsledger.library.Library;
+import pt.ulisboa.tecnico.hdsledger.utilities.ClientConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.ClientConfigBuilder;
+import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.Scanner;
 
 public class Client {
+
+    private final static String configPath = "";
 
     public static void main(String[] args) {
 
         final String clientId = args[0];
 
         final Scanner scanner = new Scanner(System.in);
-        final Library library = new Library(clientId);
+
+        ClientConfig[] configs = new ClientConfigBuilder().fromFile(configPath);
+
+        Optional<ClientConfig> clientConfig = Arrays.stream(configs).filter(c -> c.getId().equals(clientId)).findFirst();
+
+        if (clientConfig.isEmpty())
+            throw new LedgerException(ErrorMessage.ConfigFileFormat);
+
+        ClientConfig config = clientConfig.get();
+
+        final Library library = new Library(config);
 
         while (true) {
             System.out.printf("%n> ");

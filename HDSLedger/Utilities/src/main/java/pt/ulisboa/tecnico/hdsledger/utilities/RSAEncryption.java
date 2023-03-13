@@ -98,11 +98,12 @@ public class RSAEncryption {
         return digestBase64;
     }
 
-    public static boolean verifySignature(String signature, String pathToPublicKey) {
+    public static boolean verifySignature(String data, String signature, String pathToPublicKey) {
         try {
+            String hash = digest(data);
             byte[] signatureBytes = Base64.getDecoder().decode(signature);
-            decrypt(signatureBytes, pathToPublicKey);
-            return true;
+            String decryptedHash = new String(decrypt(signatureBytes, pathToPublicKey));
+            return hash.equals(decryptedHash);
 
         } catch (Exception e) {
             return false;

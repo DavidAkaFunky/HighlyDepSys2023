@@ -8,6 +8,10 @@ public class NodeConfig {
 
     private int clientPort = 0;
 
+    private String publicKeyPath;
+
+    private String privateKeyPath;
+
     public boolean isLeader() {
         return isLeader;
     }
@@ -46,5 +50,13 @@ public class NodeConfig {
 
     protected void setClientPort(int clientPort) {
         this.clientPort = clientPort;
+    }
+
+    public String getPublicKeyPath() {
+        return publicKeyPath;
+    }
+
+    public String getPrivateKeyPath() {
+        return privateKeyPath;
     }
 }
