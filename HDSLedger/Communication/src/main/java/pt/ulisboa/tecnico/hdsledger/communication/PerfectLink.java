@@ -100,7 +100,7 @@ public class PerfectLink {
                     Thread.sleep(ACK_WAIT_TIME);
                 }
                 // link.updateAck(messageId);
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} - successfully", config.getId(), data.getType(), destAddress, destPort));
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} successfully", config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }
@@ -134,7 +134,7 @@ public class PerfectLink {
                 }
 
                 SignedMessage message = new SignedMessage(jsonString, signature.get());
-                byte[] buf = Serializer.serialize(message);
+                byte[] buf = new Gson().toJson(message).getBytes();
                 DatagramPacket packet = new DatagramPacket(buf, buf.length, hostname, port);
                 socket.send(packet);
             } catch (IOException e) {
@@ -156,7 +156,7 @@ public class PerfectLink {
         byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
         SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
         Message message = new Gson().fromJson(responseData.getMessage(), Message.class);
-        if (RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(), nodes.get(message.getSenderId()).getPublicKeyPath())) {
+        if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(), nodes.get(message.getSenderId()).getPublicKeyPath())) {
             message.setType(Message.Type.IGNORE);
             return message;
         }

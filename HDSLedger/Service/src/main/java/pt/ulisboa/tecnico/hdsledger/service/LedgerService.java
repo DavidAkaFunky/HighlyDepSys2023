@@ -2,11 +2,14 @@ package pt.ulisboa.tecnico.hdsledger.service;
 
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
+import pt.ulisboa.tecnico.hdsledger.communication.SignedMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.*;
 import java.text.MessageFormat;
@@ -35,15 +38,16 @@ public class LedgerService implements UDPService {
     }
 
     public Optional<LedgerResponse> handleAppendRequest(String clientId, int clientSeq,
-            String value) {
-        return requestConsensus(clientId, clientSeq, value);
+            String value, int clientKnownBlockchainSize) {
+        return requestConsensus(clientId, clientSeq, value, clientKnownBlockchainSize);
     }
 
-    public Optional<LedgerResponse> handleReadRequest(String clientId, int clientSeq) {
-        return requestConsensus(clientId, clientSeq, "");
+    public Optional<LedgerResponse> handleReadRequest(String clientId, int clientSeq, int clientKnownBlockchainSize) {
+        return requestConsensus(clientId, clientSeq, "", clientKnownBlockchainSize);
     }
 
-    public Optional<LedgerResponse> requestConsensus(String clientId, int clientSeq, String value) {
+    public Optional<LedgerResponse> requestConsensus(String clientId, int clientSeq, String value,
+            int clientKnownBlockchainSize) {
 
         // Check if client has already sent this request
         clientRequests.putIfAbsent(clientId, ConcurrentHashMap.newKeySet());
@@ -63,6 +67,8 @@ public class LedgerService implements UDPService {
             for (;;) {
                 // Wait for consensus to finish
                 Map<Integer, String> blockchain = service.getBlockchain();
+                System.out.println("BLOCKCHAIN SIZE: " + blockchain.size());
+                System.out.println("CONSENSUS INSTANCE: " + consensusInstance);
                 if (blockchain.size() >= consensusInstance)
                     break;
                 try {
@@ -81,7 +87,7 @@ public class LedgerService implements UDPService {
                 return Optional.of(new LedgerResponse(consensusInstance, service.getBlockchainAsList()));
             else
                 return Optional.of(new LedgerResponse(consensusInstance,
-                        service.getBlockchainStartingAtInstance(consensusInstance)));
+                        service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
         }
 
         return Optional.empty();
@@ -135,17 +141,29 @@ public class LedgerService implements UDPService {
                         public void run() {
                             try {
                                 // Deserialize client request
-                                LedgerRequest message = new Gson().fromJson(new String(buffer), LedgerRequest.class);
+                                SignedMessage requestData = new Gson().fromJson(new String(buffer),
+                                        SignedMessage.class);
+                                // TODO: Uncomment block below to verify signature
+                                /*
+                                 * if (!RSAEncryption.verifySignature(responseData.getMessage(),
+                                 * responseData.getSignature(), leader.getPublicKeyPath())) {
+                                 * throw new LedgerException(ErrorMessage.SignatureDoesntMatch);
+                                 * }
+                                 */
+                                LedgerRequest message = new Gson().fromJson(requestData.getMessage(),
+                                        LedgerRequest.class);
 
                                 Optional<LedgerResponse> response;
                                 // Handle client request
                                 switch (message.getType()) {
                                     case APPEND -> {
-                                        response = handleAppendRequest(message.getClientId(), message.getClientSeq(), message.getArg());
+                                        response = handleAppendRequest(message.getClientId(), message.getClientSeq(),
+                                                message.getArg(), message.getBlockchainSize());
                                         break;
                                     }
                                     case READ -> {
-                                        response = handleReadRequest(message.getClientId(), message.getClientSeq());
+                                        response = handleReadRequest(message.getClientId(), message.getClientSeq(),
+                                                message.getBlockchainSize());
                                         break;
                                     }
                                     default -> {
@@ -158,12 +176,25 @@ public class LedgerService implements UDPService {
                                 }
 
                                 LedgerResponse ledgerResponse = response.get();
-                                System.out.println("Ledger response: " + ledgerResponse);
+                                System.out.println("Ledger response:");
                                 System.out.println(ledgerResponse.getConsensusInstance());
                                 System.out.println(ledgerResponse.getValues());
 
-                                byte[] jsonBytes = new Gson().toJson(response.get()).getBytes();
-                                DatagramPacket packet = new DatagramPacket(jsonBytes, jsonBytes.length, clientAddress, clientPort);
+                                String jsonString = new Gson().toJson(ledgerResponse);
+                                Optional<String> signature;
+                                try {
+                                    signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
+                                } catch (FileNotFoundException e) {
+                                    throw new LedgerException(ErrorMessage.ConfigFileNotFound);
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                    throw new RuntimeException();
+                                }
+
+                                SignedMessage signedMessage = new SignedMessage(jsonString, signature.get());
+                                byte[] serializedMessage = new Gson().toJson(signedMessage).getBytes();
+                                DatagramPacket packet = new DatagramPacket(serializedMessage, serializedMessage.length,
+                                        clientAddress, clientPort);
 
                                 // Reply to client
                                 socket.send(packet);

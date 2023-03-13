@@ -13,7 +13,6 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 public class Library {
 
@@ -122,7 +121,7 @@ public class Library {
             // Deserialize response
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
             SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
-            if (RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(), leader.getPublicKeyPath())) {
+            if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(), leader.getPublicKeyPath())) {
                 throw new LedgerException(ErrorMessage.SignatureDoesntMatch);
             }
 
@@ -140,10 +139,10 @@ public class Library {
         }
     }
 
-    /*public List<String> read() throws LedgerException {
+    /* public List<String> read() throws LedgerException {
 
         // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.READ, this.config, this.clientSeq++,
+        LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.READ, this.config.getId(), this.clientSeq++,
                 "",
                 this.blockchain.size());
 
@@ -187,14 +186,11 @@ public class Library {
             // because we already store the values from N instance
             // Add new values to the blockchain
             List<String> blockchainValues = responseData.getValues();
-            int currrentBlockchainSize = blockchain.size();
-            for (int i = currrentBlockchainSize + 1; i <= blockchainValues.size(); i++) {
-                blockchain.put(i, blockchainValues.get(i - 1));
-            }
+            blockchainValues.forEach((value) -> blockchain.add(value));
 
             return blockchainValues;
         } catch (IOException e) {
             throw new LedgerException(ErrorMessage.CannotOpenSocket);
         }
-    }*/
+    } */
 }
