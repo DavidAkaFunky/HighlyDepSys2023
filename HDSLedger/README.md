@@ -23,7 +23,7 @@ javac *.java
 ```
 ### Generating keys
 ```
-java RSAKeyGenerator w ./<NODE_ID>.pub ./<NODE_ID>
+java RSAKeyGenerator w ./<NODE_ID>.pub ./<NODE_ID>.priv
 ```
 ### Test keys
 

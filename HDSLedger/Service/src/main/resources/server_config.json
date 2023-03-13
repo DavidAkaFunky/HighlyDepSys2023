@@ -5,8 +5,8 @@
         "hostname": "localhost",
         "port": 3000,
         "clientPort": 4000,
-        "pathPubKey": "",
-        "pathPrivKey": ""
+        "publicKeyPath": "../PKI/node1.pub",
+        "privateKeyPath": "../PKI/node1.priv"
     },
     {
         "id": "2",
@@ -14,8 +14,8 @@
         "hostname": "localhost",
         "port": 3001,
         "clientPort": 4001,
-        "pathPubKey": "",
-        "pathPrivKey": ""
+        "publicKeyPath": "../PKI/node2.pub",
+        "privateKeyPath": "../PKI/node2.priv"
     },
     {
         "id": "3",
@@ -23,8 +23,8 @@
         "hostname": "localhost",
         "port": 3002,
         "clientPort": 4002,
-        "pathPubKey": "",
-        "pathPrivKey": ""
+        "publicKeyPath": "../PKI/node3.pub",
+        "privateKeyPath": "../PKI/node3.priv"
     },
     {
         "id": "4",
@@ -32,7 +32,7 @@
         "hostname": "localhost",
         "port": 3003,
         "clientPort": 4003,
-        "pathPubKey": "",
-        "pathPrivKey": ""
+        "publicKeyPath": "../PKI/node4.pub",
+        "privateKeyPath": "../PKI/node4.priv"
     }
 ]

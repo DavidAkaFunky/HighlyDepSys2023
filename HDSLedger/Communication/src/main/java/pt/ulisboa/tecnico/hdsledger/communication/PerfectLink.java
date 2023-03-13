@@ -5,15 +5,20 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.Serializer;
+import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.*;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
+
+import com.google.gson.Gson;
 
 public class PerfectLink {
 
@@ -116,7 +121,20 @@ public class PerfectLink {
     public void unreliableSend(InetAddress hostname, int port, Message data) {
         new Thread(() -> {
             try {
-                byte[] buf = Serializer.serialize(data);
+                // Create UDP packet
+                String jsonString = new Gson().toJson(data);
+                Optional<String> signature;
+                try {
+                    signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
+                } catch (FileNotFoundException e) {
+                    throw new LedgerException(ErrorMessage.ConfigFileNotFound);
+                } catch (Exception e) {
+                    // sorry DM
+                    throw new RuntimeException();
+                }
+
+                SignedMessage message = new SignedMessage(jsonString, signature.get());
+                byte[] buf = Serializer.serialize(message);
                 DatagramPacket packet = new DatagramPacket(buf, buf.length, hostname, port);
                 socket.send(packet);
             } catch (IOException e) {
@@ -131,15 +149,16 @@ public class PerfectLink {
     public Message receive() throws IOException, ClassNotFoundException {
 
         byte[] buf = new byte[1024];
-        DatagramPacket packet = new DatagramPacket(buf, buf.length);
+        DatagramPacket response = new DatagramPacket(buf, buf.length);
 
-        socket.receive(packet);
+        socket.receive(response);
         
-        Message message;
-        try {
-            message = Serializer.deserialize(packet.getData(), Message.class);
-        } catch (IOException | ClassNotFoundException e) {
-            throw new LedgerException(ErrorMessage.SocketReceivingError);
+        byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
+        SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
+        Message message = new Gson().fromJson(responseData.getMessage(), Message.class);
+        if (RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(), nodes.get(message.getSenderId()).getPublicKeyPath())) {
+            message.setType(Message.Type.IGNORE);
+            return message;
         }
 
         SimplexLink sendLink = senderLinks.get(message.getSenderId());

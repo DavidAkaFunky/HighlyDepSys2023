@@ -13,7 +13,7 @@ import java.util.Scanner;
 
 public class Client {
 
-    private final static String configPath = "";
+    private final static String configPath = "../Client/src/main/resources/client_config.json";
 
     public static void main(String[] args) {
 
@@ -56,7 +56,7 @@ public class Client {
                 }
                 case "read" -> {
                     System.out.println("Reading blockchain...");
-                    library.read();
+                    //library.read();
                     library.printBlockchain();
                 }
                 case "exit" -> {

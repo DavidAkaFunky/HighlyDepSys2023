@@ -54,7 +54,7 @@ public class Library {
      * Print the known blockchain content
      */
     public void printBlockchain() {
-        System.out.println("Known blockchain content: " + getBlockchain().values());
+        System.out.println("Known blockchain content: " + getBlockchain());
     }
 
     /*
@@ -94,7 +94,7 @@ public class Library {
                         } catch (FileNotFoundException e) {
                             throw new LedgerException(ErrorMessage.ConfigFileNotFound);
                         } catch (Exception e) {
-                            // sorry DM
+                            e.printStackTrace();
                             throw new RuntimeException();
                         }
 
@@ -140,7 +140,7 @@ public class Library {
         }
     }
 
-    public List<String> read() throws LedgerException {
+    /*public List<String> read() throws LedgerException {
 
         // Create message to send to blockchain service
         LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.READ, this.config, this.clientSeq++,
@@ -196,5 +196,5 @@ public class Library {
         } catch (IOException e) {
             throw new LedgerException(ErrorMessage.CannotOpenSocket);
         }
-    }
+    }*/
 }
