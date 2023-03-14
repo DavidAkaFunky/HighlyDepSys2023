@@ -32,17 +32,8 @@ public class LedgerService implements UDPService {
         this.link = link;
     }
 
-    public Optional<LedgerResponse> handleAppendRequest(String clientId, int messageId,
-            String value, int clientKnownBlockchainSize) {
-        return requestConsensus(clientId, messageId, value, clientKnownBlockchainSize);
-    }
-
-    public Optional<LedgerResponse> handleReadRequest(String clientId, int messageId, int clientKnownBlockchainSize) {
-        return requestConsensus(clientId, messageId, "", clientKnownBlockchainSize);
-    }
-
     public Optional<LedgerResponse> requestConsensus(String clientId, int messageId, String value,
-            int clientKnownBlockchainSize) {
+            int requestId, int clientKnownBlockchainSize) {
 
         // Check if client has already sent this request
         clientRequests.putIfAbsent(clientId, ConcurrentHashMap.newKeySet());
@@ -76,7 +67,7 @@ public class LedgerService implements UDPService {
             LOGGER.log(Level.INFO, "Consensus finished");
             LOGGER.log(Level.INFO, MessageFormat.format("New blockchain: {0}",service.getBlockchainAsList()));
 
-            return Optional.of(new LedgerResponse(nodeId, service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
+            return Optional.of(new LedgerResponse(nodeId, requestId, consensusInstance, service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
         }
 
         LOGGER.log(Level.INFO, "Not a new request, ignoring");
@@ -106,22 +97,13 @@ public class LedgerService implements UDPService {
                         new Thread(() -> {
                             Optional<LedgerResponse> response;
                             switch (message.getType()) {
-
-                                case APPEND -> {
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received APPEND message from {1}",
-                                                    nodeId, message.getSenderId()));
+                                case REQUEST -> {
                                     LedgerRequest request = (LedgerRequest) message;
-                                    response = handleAppendRequest(message.getSenderId(), message.getMessageId(),
-                                            request.getArg(), request.getBlockchainSize());
-                                }
-                                case READ -> {
                                     LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received READ message from {1}",
-                                                    nodeId, message.getSenderId()));
-                                    LedgerRequest request = (LedgerRequest) message;
-                                    response = handleReadRequest(message.getSenderId(), message.getMessageId(),
-                                        request.getBlockchainSize());
+                                            MessageFormat.format("{0} - Received {1} message from {2}",
+                                                    nodeId, request.getArg().equals("") ? "READ" : "APPEND", message.getSenderId()));
+                                    response = requestConsensus(message.getSenderId(), message.getMessageId(),
+                                            request.getArg(), request.getRequestId(), request.getBlockchainSize());
                                 }
                                 case ACK -> {
                                     LOGGER.log(Level.INFO,
