@@ -234,7 +234,7 @@ public class NodeService implements UDPService {
             // Add block to blockchain
             while (blockchain.size() < consensusInstance - 1) {
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(100);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }

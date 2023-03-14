@@ -23,7 +23,7 @@ import com.google.gson.Gson;
 public class PerfectLink {
 
     // Time to wait for an ACK before resending the message
-    private static final int ACK_WAIT_TIME = 1000;
+    private static final int ACK_WAIT_TIME = 100;
     private static final CustomLogger LOGGER = new CustomLogger(PerfectLink.class.getName());
     // UDP Socket
     private final DatagramSocket socket;
@@ -40,14 +40,12 @@ public class PerfectLink {
         this.config = self;
         Arrays.stream(nodes).forEach(node -> {
             this.nodes.put(node.getId(), node);
-            // extremely scuffed as it makes us impose that port numbers are different in every host,
-            // but it is what it is
+            // extremely scuffed as it makes us impose that port numbers are different in
+            // every host, but it is what it is
             this.senderLinks.put(node.getId(),
-                    new SimplexLinkBuilder().setSourceNodeConfig(config).setDestinationNodeConfig(node).build()
-            );
+                    new SimplexLinkBuilder().setSourceNodeConfig(config).setDestinationNodeConfig(node).build());
             this.receiverLinks.put(node.getId(),
-                    new SimplexLinkBuilder().setSourceNodeConfig(node).setDestinationNodeConfig(config).build()
-            );
+                    new SimplexLinkBuilder().setSourceNodeConfig(node).setDestinationNodeConfig(config).build());
 
         });
         try {
@@ -82,25 +80,34 @@ public class PerfectLink {
             try {
                 // this validates input
                 SimplexLink sendLink = senderLinks.get(nodeId);
-                SimplexLink recLink = receiverLinks.get(nodeId);
-                if (sendLink == null || recLink == null)
+                SimplexLink recvLink = receiverLinks.get(nodeId);
+                if (sendLink == null || recvLink == null)
                     throw new LedgerException(ErrorMessage.NoSuchNode);
+
                 // move message stamping to perfect links
                 data.setMessageId(sendLink.stampMessage());
+
                 // If the message is not ACK, within 1 second it will be resent
                 InetAddress destAddress = InetAddress.getByName(sendLink.getDestinationNodeConfig().getHostname());
                 int destPort = sendLink.getDestinationNodeConfig().getPort();
                 int count = 1;
 
                 for (;;) {
-                    LOGGER.log(Level.INFO, MessageFormat.format("{0} - Sending {1} message to {2}:{3} - Attempt #{4}", config.getId(), data.getType(), destAddress, destPort, count++));
+                    LOGGER.log(Level.INFO, MessageFormat.format(
+                            "{0} - Sending {1} message to {2}:{3} with message ID {4} (current ack is {5}) - Attempt #{6}", config.getId(),
+                            data.getType(), destAddress, destPort, data.getMessageId(), sendLink.getSequenceNumber(), count++));
+
                     unreliableSend(destAddress, destPort, data);
-                    // update with 0 as the argument is just a get (update only happens when arg == lastAck + 1)
-                    if (sendLink.tryUpdateSeq(0) >= data.getMessageId()) break;
+
+                    // Wait, then look for ACK
                     Thread.sleep(ACK_WAIT_TIME);
+
+                    if (sendLink.getLastAckedSeq() >= data.getMessageId())
+                        break;
                 }
                 // link.updateAck(messageId);
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} successfully", config.getId(), data.getType(), destAddress, destPort));
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} successfully",
+                        config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }
@@ -152,38 +159,49 @@ public class PerfectLink {
         DatagramPacket response = new DatagramPacket(buf, buf.length);
 
         socket.receive(response);
-        
+
         byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
         SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
         Message message = new Gson().fromJson(responseData.getMessage(), Message.class);
-        if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(), nodes.get(message.getSenderId()).getPublicKeyPath())) {
+        if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
+                nodes.get(message.getSenderId()).getPublicKeyPath())) {
+            System.out.println("Invalid signature - IGNORING");
             message.setType(Message.Type.IGNORE);
             return message;
         }
 
         SimplexLink sendLink = senderLinks.get(message.getSenderId());
-        SimplexLink recLink = receiverLinks.get(message.getSenderId());
-        if (sendLink == null || recLink == null)
+        SimplexLink recvLink = receiverLinks.get(message.getSenderId());
+        if (sendLink == null || recvLink == null)
             throw new LedgerException(ErrorMessage.NoSuchNode);
 
         // ACK -> tratar logo
         if (message.getType().equals(Message.Type.ACK)) {
-            int lastAck = sendLink.tryUpdateSeq(message.getMessageId());
-            if (lastAck != message.getMessageId()) message.setType(Message.Type.IGNORE);
+            System.out.println("ACK received from " + message.getSenderId() + " currentSeq: "
+                    + sendLink.getSequenceNumber() + " lastAck: " + message.getMessageId());
+            int lastAck = sendLink.tryUpdateAck(message.getMessageId());
+            if (lastAck != message.getMessageId()) {
+                System.out.println("ACK out of order - IGNORING");
+                message.setType(Message.Type.IGNORE);
+            }
             return message;
         }
 
         // Normal -> if (nao ha buracos): devolve else: ignora
-        if (recLink.tryUpdateSeq(message.getMessageId()) == message.getMessageId()){
+        if (recvLink.tryUpdateSeq(message.getMessageId()) == message.getMessageId()) {
             // ACK is sent without needing for another ACK because
             // we're assuming an eventually synchronous network
             // Even if a node receives the message multiple times,
             // it will discard duplicates
-            try { // this will never error
-                var address = InetAddress.getByName(recLink.getSourceNodeConfig().getHostname());
-                var port = recLink.getSourceNodeConfig().getPort();
-                unreliableSend(address, port, new Message(this.config.getId(), message.getMessageId(), Message.Type.ACK, new ArrayList<>()));
-            } catch(UnknownHostException e) {
+            try {
+                var address = InetAddress.getByName(recvLink.getSourceNodeConfig().getHostname());
+                var port = recvLink.getSourceNodeConfig().getPort();
+                LOGGER.log(Level.INFO, MessageFormat.format(
+                            "{0} - ACKING {1} - ID {2} message to {3}:{4}", config.getId(),
+                            message.getType(), message.getMessageId(), address, port));
+                unreliableSend(address, port,
+                        new Message(this.config.getId(), message.getMessageId(), Message.Type.ACK, new ArrayList<>()));
+            } catch (UnknownHostException e) {
                 throw new LedgerException(ErrorMessage.NoSuchNode);
             }
             return message;

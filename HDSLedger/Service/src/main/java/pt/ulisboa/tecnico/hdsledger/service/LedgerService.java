@@ -64,18 +64,19 @@ public class LedgerService implements UDPService {
             // Start consensus instance
             int consensusInstance = service.startConsensus(value);
             // service.requestNewBlocks(latestInstanceKnownByClient);
+            Map<Integer, String> blockchain;
             for (;;) {
                 // Wait for consensus to finish
-                Map<Integer, String> blockchain = service.getBlockchain();
+                blockchain = service.getBlockchain();
                 System.out.println("BLOCKCHAIN SIZE: " + blockchain.size());
                 System.out.println("CONSENSUS INSTANCE: " + consensusInstance);
-                if (blockchain.size() >= consensusInstance)
-                    break;
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(100);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
+                if (blockchain.size() >= consensusInstance)
+                    break;
             }
 
             System.out.println("Consensus finished");

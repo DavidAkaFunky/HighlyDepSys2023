@@ -9,7 +9,7 @@ class SimplexLink {
     private NodeConfig destinationNodeConfig;
 
     private int sequenceNumber = 0;
-
+    private int lastAckedSeq = 0;
 
     public NodeConfig getSourceNodeConfig() {
         return sourceNodeConfig;
@@ -27,20 +27,39 @@ class SimplexLink {
         this.destinationNodeConfig = destinationNodeConfig;
     }
 
-    private int unsafeInc() {
+    public int getSequenceNumber() {
+        return sequenceNumber;
+    }
+
+    public int getLastAckedSeq() {
+        return lastAckedSeq;
+    }
+
+    private int unsafeSeqInc() {
         sequenceNumber++;
         return sequenceNumber;
     }
 
+    private int unsafeAckInc() {
+        lastAckedSeq++;
+        return lastAckedSeq;
+    }
+
     public int stampMessage() {
         synchronized (this) {
-            return unsafeInc();
+            return unsafeSeqInc();
         }
     }
 
     public int tryUpdateSeq(int seq) {
         synchronized (this) {
-            return seq == (sequenceNumber + 1) ? unsafeInc() : sequenceNumber;
+            return seq == (sequenceNumber + 1) ? unsafeSeqInc() : sequenceNumber;
+        }
+    }
+    
+    public int tryUpdateAck(int ack) {
+        synchronized (this) {
+            return ack == (lastAckedSeq + 1) ? unsafeAckInc() : lastAckedSeq;
         }
     }
 }

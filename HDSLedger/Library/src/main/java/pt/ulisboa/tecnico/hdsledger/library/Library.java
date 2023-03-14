@@ -103,7 +103,7 @@ public class Library {
                         // Send packet
 
                         socket.send(packet);
-                        Thread.sleep(1000);
+                        Thread.sleep(100);
                     } catch (IOException e) {
                         throw new LedgerException(ErrorMessage.SocketSendingError);
                     } catch (InterruptedException e) {
@@ -163,7 +163,7 @@ public class Library {
                         // Send packet
 
                         socket.send(packet);
-                        Thread.sleep(1000);
+                        Thread.sleep(100);
                     } catch (IOException e) {
                         throw new LedgerException(ErrorMessage.SocketSendingError);
                     } catch (InterruptedException e) {
