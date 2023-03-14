@@ -19,7 +19,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
+
 
 import com.google.gson.Gson;
 
@@ -32,12 +34,12 @@ public class PerfectLink {
     private final DatagramSocket socket;
     // Map of all nodes in the network
     private final Map<String, ProcessConfig> nodes = new ConcurrentHashMap<>();
-    //Set of received messages from specifi node (prevent duplicates)
+    // Set of received messages from specifi node (prevent duplicates)
     private Map<String, Set<Integer>> receivedMessages = new ConcurrentHashMap<>();
     // Set of received ACKs from specific node
-    private Map<String, Set<Integer>> receivedAcks = new ConcurrentHashMap<>();
+    private Set<Integer> receivedAcks = ConcurrentHashMap.newKeySet();
     // Message counter
-    private int messageCounter = 0;
+    private AtomicInteger messageCounter = new AtomicInteger(0);
     // Reference to the node itself
     private final ProcessConfig config;
     // Class to deserialize messages to
@@ -50,7 +52,6 @@ public class PerfectLink {
             String id = node.getId();
             this.nodes.put(id, node);
             receivedMessages.put(id, new HashSet<>());
-            receivedAcks.put(id, new HashSet<>());
         });
 
         try {
@@ -66,7 +67,8 @@ public class PerfectLink {
      * @param data The message to be broadcasted
      */
     public void broadcast(Message data) {
-        nodes.forEach((destId, dest) -> send(destId, data));
+        Gson gson = new Gson();
+        nodes.forEach((destId, dest) -> send(destId, gson.fromJson(gson.toJson(data), data.getClass())));
     }
 
     /*
@@ -81,14 +83,11 @@ public class PerfectLink {
         // To avoid blocking while waiting for ACK
         new Thread(() -> {
             try {
-
-                // Destination node
-                ProcessConfig node = nodes.get(nodeId);                
+                ProcessConfig node = nodes.get(nodeId);
                 if (node == null)
                     throw new LedgerException(ErrorMessage.NoSuchNode);
-                    
-                // move message stamping to perfect links
-                data.setMessageId(this.messageCounter++);
+
+                data.setMessageId(messageCounter.getAndIncrement());
 
                 // If the message is not ACK, it will be resent
                 InetAddress destAddress = InetAddress.getByName(node.getHostname());
@@ -99,7 +98,7 @@ public class PerfectLink {
                 for (;;) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
-                            data.getType(), destAddress, destPort, data.getMessageId(), count++));
+                            data.getType(), destAddress, destPort, messageId, count++));
 
                     unreliableSend(destAddress, destPort, data);
 
@@ -107,11 +106,12 @@ public class PerfectLink {
                     Thread.sleep(ACK_WAIT_TIME);
 
                     // receive method will set receivedAcks when sees corresponding ACK
-                    if (receivedAcks.get(nodeId).contains(messageId))
+                    if (receivedAcks.contains(messageId))
                         break;
                 }
                 // link.updateAck(messageId);
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - NodeMessage {1} sent to {2}:{3} successfully", config.getId(), data.getType(), destAddress, destPort));
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - NodeMessage {1} sent to {2}:{3} successfully",
+                        config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }
@@ -135,6 +135,7 @@ public class PerfectLink {
 
                 // Sign message
                 String jsonString = new Gson().toJson(data);
+                System.out.println(data.getMessageId() + " SENDING: " + jsonString);
                 Optional<String> signature;
                 try {
                     signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
@@ -171,6 +172,7 @@ public class PerfectLink {
         byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
         SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
         Message message = new Gson().fromJson(responseData.getMessage(), Message.class);
+        System.out.println("RECEIVED: " + new Gson().toJson(message));
 
         // Verify signature
         if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
@@ -184,13 +186,14 @@ public class PerfectLink {
         }
 
         String senderId = message.getSenderId();
+        int messageId = message.getMessageId();
 
         if (!nodes.containsKey(senderId))
             throw new LedgerException(ErrorMessage.NoSuchNode);
 
         // Handle ACKS, since it's possible to receive multiple acks from the same message
         if (message.getType().equals(NodeMessage.Type.ACK)) {
-            receivedAcks.get(message.getSenderId()).add(message.getMessageId());
+            receivedAcks.add(messageId);
             return message;
         }
 
@@ -198,13 +201,13 @@ public class PerfectLink {
         message = new Gson().fromJson(responseData.getMessage(), messageClass);
 
         // Message already received (add returns false if already exists) => Discard
-        if (!receivedMessages.get(message.getSenderId()).add(message.getMessageId())) {
+        if (!receivedMessages.get(message.getSenderId()).add(messageId)) {
             message.setType(NodeMessage.Type.IGNORE);
         }
-        
+
         InetAddress address = InetAddress.getByName(response.getAddress().getHostAddress());
         int port = response.getPort();
-            
+
         Message responseMessage = new Message(this.config.getId(), NodeMessage.Type.ACK);
         responseMessage.setMessageId(message.getMessageId());
 

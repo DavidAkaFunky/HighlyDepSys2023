@@ -143,8 +143,8 @@ public class Library {
                                 }
                                 case ACK -> {
                                     LOGGER.log(Level.INFO,
-                                            MessageFormat.format("Received ACK message from {0}",
-                                                    message.getSenderId()));
+                                            MessageFormat.format("Received ACK {0} message from {1}",
+                                                    message.getMessageId(), message.getSenderId()));
                                     return;
                                 }
                                 default -> {
