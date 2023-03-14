@@ -6,8 +6,8 @@ public class LedgerResponse extends Message {
     
     private List<String> values;
 
-    public LedgerResponse(String senderId, int messageId, List<String> values) {
-        super(senderId, messageId, Type.REPLY);
+    public LedgerResponse(String senderId, List<String> values) {
+        super(senderId, Type.REPLY);
         this.values = values;
     }
 

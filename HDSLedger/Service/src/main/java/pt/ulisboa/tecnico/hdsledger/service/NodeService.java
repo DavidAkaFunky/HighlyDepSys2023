@@ -11,8 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Timer;
-// import java.util.TimerTask;
+
 import java.util.concurrent.ConcurrentHashMap;
 
 import java.util.logging.Level;
@@ -25,12 +24,11 @@ public class NodeService implements UDPService {
     // Store strings
     private final Map<Integer, String> blockchain = new ConcurrentHashMap<>();
 
+    // Current node is leader
     private boolean isLeader;
-    // TODO: Devia ser o PerfectLink a meter o counter na message ?
-    // Probably um construtor para a mensagem sem o counter e depois é feito set
-    private int messageCount = 0;
-
     private String nodeId;
+
+    // Consensus info
     private int consensusInstance = 0;
     private Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
 
@@ -111,7 +109,7 @@ public class NodeService implements UDPService {
             messageArgs.add(String.valueOf(instance.getCurrentRound()));
             messageArgs.add(instance.getInputValue());
 
-            NodeMessage prePrepareMessage = new NodeMessage(nodeId, this.messageCount++, NodeMessage.Type.PRE_PREPARE, messageArgs);
+            NodeMessage prePrepareMessage = new NodeMessage(nodeId, NodeMessage.Type.PRE_PREPARE, messageArgs);
 
             LOGGER.log(Level.INFO, MessageFormat.format(
                     "{0} - Node is leader, sending PRE-PREPARE messages", nodeId));
@@ -173,7 +171,7 @@ public class NodeService implements UDPService {
                         "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4}",
                         nodeId, message.getSenderId(), consensusInstance, round, value));
 
-        NodeMessage prepareMessage = new NodeMessage(nodeId, this.messageCount++, NodeMessage.Type.PREPARE, message.getArgs());
+        NodeMessage prepareMessage = new NodeMessage(nodeId, NodeMessage.Type.PREPARE, message.getArgs());
         this.link.broadcast(prepareMessage);
 
         // Cancel previous timer and start new one
@@ -227,7 +225,7 @@ public class NodeService implements UDPService {
             messageArgs.add(String.valueOf(instance.getCurrentRound()));
             messageArgs.add(instance.getPreparedValue());
 
-            NodeMessage commitMessage = new NodeMessage(nodeId, this.messageCount++, NodeMessage.Type.COMMIT, messageArgs);
+            NodeMessage commitMessage = new NodeMessage(nodeId, NodeMessage.Type.COMMIT, messageArgs);
 
             this.link.broadcast(commitMessage);
         }
@@ -261,7 +259,7 @@ public class NodeService implements UDPService {
             // Add block to blockchain
             while (blockchain.size() < consensusInstance - 1) {
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }

@@ -5,8 +5,8 @@ public class LedgerRequest extends Message {
     private String arg;
     private int blockchainSize;
 
-    public LedgerRequest(Type type, String senderId, int messageId, String arg, int blockchainSize) {
-        super(senderId, messageId, type);
+    public LedgerRequest(Type type, String senderId, String arg, int blockchainSize) {
+        super(senderId, type);
         this.arg = arg;
         this.blockchainSize = blockchainSize;
     }

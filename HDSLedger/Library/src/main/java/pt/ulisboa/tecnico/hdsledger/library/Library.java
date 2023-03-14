@@ -22,8 +22,6 @@ public class Library {
     private final List<String> blockchain = new ArrayList<>();
     // Client identifier
     private final ProcessConfig config;
-    // Message sequence number
-    private int messageId = 1;
     // Link to communicate with blockchain nodes
     private PerfectLink link;
     // Map of responses from nodes
@@ -78,8 +76,7 @@ public class Library {
     public List<String> append(String value) {
 
         // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.APPEND, this.config.getId(),
-                this.messageId++, value, this.blockchain.size());
+        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.APPEND, this.config.getId(), value, this.blockchain.size());
         
         return requestBlockchainOperation(request);
     }
@@ -93,8 +90,7 @@ public class Library {
     public void read() {
 
         // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.APPEND, this.config.getId(),
-                this.messageId++, "", this.blockchain.size());
+        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.APPEND, this.config.getId(), "", this.blockchain.size());
         
         requestBlockchainOperation(request);
     }
@@ -107,7 +103,7 @@ public class Library {
 
         while ((ledgerResponse = responses.get(request.getMessageId())) == null) {
             try {
-                Thread.sleep(100);
+                Thread.sleep(1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -138,7 +134,7 @@ public class Library {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("Received REPLY message from {0}",
                                                     message.getSenderId()));
-                                    System.out.println("Leader: " + leader.getId() + " Sender: " + message.getSenderId());
+                                                    
                                     if (!message.getSenderId().equals(leader.getId()))
                                         return;
                                     LedgerResponse response = (LedgerResponse) message;
@@ -166,75 +162,5 @@ public class Library {
             e.printStackTrace();
         }
     }
-
-    /* public List<String> read() throws LedgerException {
-
-        // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.READ, this.config.getId(), this.messageId++,
-                "",
-                this.blockchain.size());
-
-        try {
-            Thread sendThread = new Thread(() -> {
-                for (;;) {
-                    try {
-                        InetAddress address = InetAddress.getByName(leader.getHostname());
-
-                        int port = leader.getClientPort();
-
-                        // Sign message
-                        String jsonString = new Gson().toJson(request);
-                        Optional<String> signature;
-                        try {
-                            signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            throw new RuntimeException();
-                        }
-
-                        // Create UDP packet
-                        SignedMessage message = new SignedMessage(jsonString, signature.get());
-                        byte[] serializedMessage = new Gson().toJson(message).getBytes();
-                        DatagramPacket packet = new DatagramPacket(serializedMessage, serializedMessage.length, address,
-                                port);
-
-                        // Send packet
-                        socket.send(packet);
-                        Thread.sleep(100);
-                    } catch (IOException e) {
-                        throw new LedgerException(ErrorMessage.SocketSendingError);
-                    } catch (InterruptedException e) {
-                        break;
-                    }
-                }
-            });
-            sendThread.start();
-
-            // Receive response
-            DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
-            socket.receive(response);
-            sendThread.interrupt();
-
-            // Verify signature
-            byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
-            SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
-            if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
-                    leader.getPublicKeyPath())) {
-                throw new LedgerException(ErrorMessage.SignatureDoesntMatch);
-            }
-
-            // Deserialize response
-            LedgerResponse ledgerResponse = new Gson().fromJson(responseData.getMessage(), LedgerResponse.class);
-
-            // Add new values to the blockchain
-            List<String> blockchainValues = ledgerResponse.getValues();
-            blockchain.addAll(ledgerResponse.getValues().stream().toList());
-
-            return blockchainValues;
-
-        } catch (IOException e) {
-            throw new LedgerException(ErrorMessage.CannotOpenSocket);
-        }
-    } */
 
 }

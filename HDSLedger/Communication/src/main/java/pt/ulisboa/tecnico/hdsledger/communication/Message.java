@@ -17,9 +17,8 @@ public class Message implements Serializable {
         REPLY;
     }
 
-    public Message(String senderId, int messageId, Type type) {
+    public Message(String senderId, Type type) {
         this.senderId = senderId;
-        this.messageId = messageId;
         this.type = type;
     }
 

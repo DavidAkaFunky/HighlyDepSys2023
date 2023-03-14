@@ -4,26 +4,17 @@ import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
-import pt.ulisboa.tecnico.hdsledger.communication.SignedMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
-import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.*;
 import java.text.MessageFormat;
 import java.util.logging.Level;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-
-import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
 
 public class LedgerService implements UDPService {
 
@@ -74,7 +65,7 @@ public class LedgerService implements UDPService {
                 System.out.println("BLOCKCHAIN SIZE: " + blockchain.size());
                 System.out.println("CONSENSUS INSTANCE: " + consensusInstance);
                 try {
-                    Thread.sleep(100);
+                    Thread.sleep(1000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -85,8 +76,7 @@ public class LedgerService implements UDPService {
             LOGGER.log(Level.INFO, "Consensus finished");
             LOGGER.log(Level.INFO, MessageFormat.format("New blockchain: {0}",service.getBlockchainAsList()));
 
-            return Optional.of(new LedgerResponse(nodeId, messageId,
-                    service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
+            return Optional.of(new LedgerResponse(nodeId, service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
         }
 
         LOGGER.log(Level.INFO, "Not a new request, ignoring");
@@ -139,7 +129,14 @@ public class LedgerService implements UDPService {
                                                     nodeId, message.getSenderId()));
                                     return;
                                 }
+                                case IGNORE -> {
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received IGNORE message from {1}",
+                                                    nodeId, message.getSenderId()));
+                                    return;
+                                }
                                 default -> {
+                                    System.out.println(message.getType());
                                     throw new LedgerException(ErrorMessage.CannotParseMessage);
                                 }
                             }
@@ -159,120 +156,5 @@ public class LedgerService implements UDPService {
             e.printStackTrace();
         }
     }
-
-    //@Override
-    //public void listen() {
-    //    // Thread to listen on every request
-    //    // This is not thread safe but it's okay because
-    //    // a client only sends one request at a time
-    //    // thread listening for client requests on clientPort {Append, Read}
-    //    new Thread(() -> {
-
-    //        try {
-
-    //            // Create socket to listen for client requests
-    //            int port = config.getClientPort();
-    //            InetAddress address = InetAddress.getByName(config.getHostname());
-    //            DatagramSocket socket = new DatagramSocket(port, address);
-
-    //            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Started LedgerService on {1}:{2}",
-    //                    config.getId(), address, port));
-
-    //            for (;;) {
-
-    //                // Packet to receive client requests
-    //                // TODO: Can this be moved outside the loop?
-    //                DatagramPacket packet = new DatagramPacket(new byte[1024], 1024);
-
-    //                // Receive client request
-    //                socket.receive(packet);
-
-    //                // Spawn thread to handle client request
-    //                // Runnable with parameters is used to avoid race conditions between receiving
-    //                // and reading data
-    //                // due to multiple packets being received at the same time
-    //                new Thread(new Runnable() {
-    //                    private InetAddress clientAddress = packet.getAddress();
-    //                    private int clientPort = packet.getPort();
-    //                    private byte[] buffer = Arrays.copyOfRange(packet.getData(), 0, packet.getLength());
-
-    //                    @Override
-    //                    public void run() {
-    //                        try {
-    //                            // Deserialize client request
-    //                            SignedMessage requestData = new Gson().fromJson(new String(buffer),
-    //                                    SignedMessage.class);
-    //                            // TODO: Uncomment block below to verify signature
-    //                            /*
-    //                             * if (!RSAEncryption.verifySignature(responseData.getMessage(),
-    //                             * responseData.getSignature(), leader.getPublicKeyPath())) {
-    //                             * throw new LedgerException(ErrorMessage.SignatureDoesntMatch);
-    //                             * }
-    //                             */
-    //                            LedgerRequest message = new Gson().fromJson(requestData.getMessage(),
-    //                                    LedgerRequest.class);
-
-    //                            Optional<LedgerResponse> response;
-    //                            // Handle client request
-    //                            switch (message.getType()) {
-    //                                case APPEND -> {
-    //                                    response = handleAppendRequest(message.getSenderId(), message.getClientSeq(),
-    //                                            message.getArg(), message.getBlockchainSize());
-    //                                    break;
-    //                                }
-    //                                case READ -> {
-    //                                    response = handleReadRequest(message.getSenderId(), message.getClientSeq(),
-    //                                            message.getBlockchainSize());
-    //                                    break;
-    //                                }
-    //                                default -> {
-    //                                    throw new LedgerException(ErrorMessage.CannotParseMessage);
-    //                                }
-    //                            }
-
-    //                            if (response.isEmpty()) {
-    //                                return;
-    //                            }
-
-    //                            LedgerResponse ledgerResponse = response.get();
-    //                            System.out.println("Ledger response:");
-    //                            System.out.println(ledgerResponse.getConsensusInstance());
-    //                            System.out.println(ledgerResponse.getValues());
-
-    //                            String jsonString = new Gson().toJson(ledgerResponse);
-    //                            Optional<String> signature;
-    //                            try {
-    //                                signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
-    //                            } catch (FileNotFoundException e) {
-    //                                throw new LedgerException(ErrorMessage.ConfigFileNotFound);
-    //                            } catch (Exception e) {
-    //                                e.printStackTrace();
-    //                                throw new RuntimeException();
-    //                            }
-
-    //                            SignedMessage signedMessage = new SignedMessage(jsonString, signature.get());
-    //                            byte[] serializedMessage = new Gson().toJson(signedMessage).getBytes();
-    //                            DatagramPacket packet = new DatagramPacket(serializedMessage, serializedMessage.length,
-    //                                    clientAddress, clientPort);
-
-    //                            // Reply to client
-    //                            socket.send(packet);
-
-    //                        } catch (IOException | JsonSyntaxException e) {
-    //                            socket.close();
-    //                            throw new LedgerException(ErrorMessage.CannotParseMessage);
-    //                        }
-    //                    }
-    //                }).start();
-    //            }
-
-    //        } catch (SocketException | UnknownHostException e) {
-    //            throw new LedgerException(ErrorMessage.CannotOpenSocket);
-    //        } catch (IOException e) {
-    //            e.printStackTrace();
-    //            // throw new LedgerException(ErrorMessage.SocketReceivingError);
-    //        }
-    //    }).start();
-    //}
 
 }
