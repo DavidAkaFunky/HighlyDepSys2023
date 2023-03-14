@@ -1,47 +1,14 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-public class LedgerRequest {
+public class LedgerRequest extends Message {
 
-    public enum LedgerRequestType {
-        APPEND, READ
-    }
+    private String arg;
+    private int blockchainSize;
 
-    protected LedgerRequestType type;
-    protected String clientId;
-    protected int clientSeq;
-    protected String arg;
-    protected int blockchainSize;
-
-    public LedgerRequest(LedgerRequestType type, String clientId, int clientSeq, String arg, int blockchainSize) {
-        this.type = type;
-        this.clientId = clientId;
-        this.clientSeq = clientSeq;
+    public LedgerRequest(Type type, String senderId, int messageId, String arg, int blockchainSize) {
+        super(senderId, messageId, type);
         this.arg = arg;
         this.blockchainSize = blockchainSize;
-    }
-
-    public LedgerRequestType getType() {
-        return type;
-    }
-
-    public void setType(LedgerRequestType type) {
-        this.type = type;
-    }
-
-    public String getClientId() {
-        return clientId;
-    }
-
-    public void setClientId(String clientId) {
-        this.clientId = clientId;
-    }
-
-    public int getClientSeq() {
-        return clientSeq;
-    }
-
-    public void setClientSeq(int clientSeq) {
-        this.clientSeq = clientSeq;
     }
 
     public String getArg() {

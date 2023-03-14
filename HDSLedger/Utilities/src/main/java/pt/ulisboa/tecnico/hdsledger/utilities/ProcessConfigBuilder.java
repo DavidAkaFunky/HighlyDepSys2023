@@ -9,44 +9,44 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-public class NodeConfigBuilder {
+public class ProcessConfigBuilder {
 
-    private final NodeConfig instance = new NodeConfig();
+    private final ProcessConfig instance = new ProcessConfig();
 
-    public NodeConfigBuilder setHostname(String hostname) {
+    public ProcessConfigBuilder setHostname(String hostname) {
         instance.setHostname(hostname);
         return this;
     }
 
-    public NodeConfigBuilder setLeader(boolean isLeader) {
+    public ProcessConfigBuilder setLeader(boolean isLeader) {
         instance.setLeader(isLeader);
         return this;
     }
 
-    public NodeConfigBuilder setPort(int port) {
+    public ProcessConfigBuilder setPort(int port) {
         instance.setPort(port);
         return this;
     }
 
-    public NodeConfigBuilder setId(String id) {
+    public ProcessConfigBuilder setId(String id) {
         instance.setId(id);
         return this;
     }
 
-    public NodeConfigBuilder setClientPort(int port) {
+    public ProcessConfigBuilder setClientPort(int port) {
         instance.setClientPort(port);
         return this;
     }
 
-    public NodeConfig build() {
+    public ProcessConfig build() {
         return instance;
     }
 
-    public NodeConfig[] fromFile(String path) {
+    public ProcessConfig[] fromFile(String path) {
         try (BufferedInputStream is = new BufferedInputStream(new FileInputStream(path))) {
             String input = new String(is.readAllBytes(), StandardCharsets.UTF_8);
             Gson gson = new Gson();
-            return gson.fromJson(input, NodeConfig[].class);
+            return gson.fromJson(input, ProcessConfig[].class);
         } catch (FileNotFoundException e) {
             throw new LedgerException(ErrorMessage.ConfigFileNotFound);
         } catch (IOException | JsonSyntaxException e) {

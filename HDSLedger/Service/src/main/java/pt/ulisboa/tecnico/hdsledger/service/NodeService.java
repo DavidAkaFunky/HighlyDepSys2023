@@ -2,11 +2,10 @@ package pt.ulisboa.tecnico.hdsledger.service;
 
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.communication.NodeMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
-import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -112,7 +111,7 @@ public class NodeService implements UDPService {
             messageArgs.add(String.valueOf(instance.getCurrentRound()));
             messageArgs.add(instance.getInputValue());
 
-            Message prePrepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PRE_PREPARE, messageArgs);
+            NodeMessage prePrepareMessage = new NodeMessage(nodeId, this.messageCount++, NodeMessage.Type.PRE_PREPARE, messageArgs);
 
             LOGGER.log(Level.INFO, MessageFormat.format(
                     "{0} - Node is leader, sending PRE-PREPARE messages", nodeId));
@@ -146,7 +145,7 @@ public class NodeService implements UDPService {
      * 
      * @param message Message to be handled
      */
-    public void uponPrePrepare(Message message) {
+    public void uponPrePrepare(NodeMessage message) {
 
         int consensusInstance = Integer.parseInt(message.getArgs().get(0));
         int round = Integer.parseInt(message.getArgs().get(1));
@@ -174,7 +173,7 @@ public class NodeService implements UDPService {
                         "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4}",
                         nodeId, message.getSenderId(), consensusInstance, round, value));
 
-        Message prepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PREPARE, message.getArgs());
+        NodeMessage prepareMessage = new NodeMessage(nodeId, this.messageCount++, NodeMessage.Type.PREPARE, message.getArgs());
         this.link.broadcast(prepareMessage);
 
         // Cancel previous timer and start new one
@@ -197,7 +196,7 @@ public class NodeService implements UDPService {
      * 
      * @param message Message to be handled
      */
-    public void uponPrepare(Message message) {
+    public void uponPrepare(NodeMessage message) {
 
         int consensusInstance = Integer.parseInt(message.getArgs().get(0));
         int round = Integer.parseInt(message.getArgs().get(1));
@@ -228,7 +227,7 @@ public class NodeService implements UDPService {
             messageArgs.add(String.valueOf(instance.getCurrentRound()));
             messageArgs.add(instance.getPreparedValue());
 
-            Message commitMessage = new Message(nodeId, this.messageCount++, Message.Type.COMMIT, messageArgs);
+            NodeMessage commitMessage = new NodeMessage(nodeId, this.messageCount++, NodeMessage.Type.COMMIT, messageArgs);
 
             this.link.broadcast(commitMessage);
         }
@@ -239,7 +238,7 @@ public class NodeService implements UDPService {
      * 
      * @param message Message to be handled
      */
-    public void uponCommit(Message message) {
+    public void uponCommit(NodeMessage message) {
 
         int consensusInstance = Integer.parseInt(message.getArgs().get(0));
         int round = Integer.parseInt(message.getArgs().get(1));
@@ -283,10 +282,7 @@ public class NodeService implements UDPService {
         }
     }
 
-    /*
-     * NOT IMPLEMENTED
-     */
-    void uponRoundChange(Message message) {
+    void uponRoundChange(NodeMessage message) {
         int consensusInstance = Integer.parseInt(message.getArgs().get(0));
         int round = Integer.parseInt(message.getArgs().get(1));
 
@@ -324,19 +320,19 @@ public class NodeService implements UDPService {
                             switch (message.getType()) {
 
                                 case PRE_PREPARE -> {
-                                    uponPrePrepare(message);
+                                    uponPrePrepare((NodeMessage) message);
                                 }
 
                                 case PREPARE -> {
-                                    uponPrepare(message);
+                                    uponPrepare((NodeMessage) message);
                                 }
 
                                 case COMMIT -> {
-                                    uponCommit(message);
+                                    uponCommit((NodeMessage) message);
                                 }
 
                                 case ROUND_CHANGE -> {
-                                    uponRoundChange(message);
+                                    uponRoundChange((NodeMessage) message);
                                 }
 
                                 case ACK -> {

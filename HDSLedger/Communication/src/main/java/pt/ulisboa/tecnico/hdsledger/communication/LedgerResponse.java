@@ -2,22 +2,13 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 import java.util.List;
 
-public class LedgerResponse {
+public class LedgerResponse extends Message {
     
-    private int consensusInstance;
     private List<String> values;
 
-    public LedgerResponse(int consensusInstance, List<String> values) {
-        this.consensusInstance = consensusInstance;
+    public LedgerResponse(String senderId, int messageId, List<String> values) {
+        super(senderId, messageId, Type.REPLY);
         this.values = values;
-    }
-
-    public int getConsensusInstance() {
-        return consensusInstance;
-    }
-
-    public void setConsensusInstance(int consensusInstance) {
-        this.consensusInstance = consensusInstance;
     }
 
     public List<String> getValues() {

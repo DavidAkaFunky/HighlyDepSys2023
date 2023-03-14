@@ -3,7 +3,7 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
-import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
@@ -26,18 +26,20 @@ public class PerfectLink {
     // UDP Socket
     private final DatagramSocket socket;
     // Map of all nodes in the network
-    private final Map<String, NodeConfig> nodes = new ConcurrentHashMap<>();
+    private final Map<String, ProcessConfig> nodes = new ConcurrentHashMap<>();
     // Map ID to a unidirectional link, in this case where this node is the sender
     private final Map<String, SimplexLink> senderLinks = new ConcurrentHashMap<>();
     // Map ID to a unidirectional link, in this case where this node is the receiver
     private final Map<String, SimplexLink> receiverLinks = new ConcurrentHashMap<>();
     // Reference to the node itself
-    private final NodeConfig config;
+    private final ProcessConfig config;
+    // Class to deserialize messages to
+    private final Class<? extends Message> messageClass;
 
-    public PerfectLink(NodeConfig self, NodeConfig[] nodes) {
+    public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
         this.config = self;
+        this.messageClass = messageClass;
 
-        // Create SimplexLinks for each node in the network
         Arrays.stream(nodes).forEach(node -> {
             this.nodes.put(node.getId(), node);
             // extremely scuffed as it makes us impose that port numbers are different in
@@ -49,7 +51,7 @@ public class PerfectLink {
         });
 
         try {
-            this.socket = new DatagramSocket(config.getPort(), InetAddress.getByName(config.getHostname()));
+            this.socket = new DatagramSocket(port, InetAddress.getByName(config.getHostname()));
         } catch (UnknownHostException | SocketException e) {
             throw new LedgerException(ErrorMessage.CannotOpenSocket);
         }
@@ -106,8 +108,7 @@ public class PerfectLink {
                         break;
                 }
                 // link.updateAck(messageId);
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} successfully",
-                        config.getId(), data.getType(), destAddress, destPort));
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - NodeMessage {1} sent to {2}:{3} successfully", config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }
@@ -148,6 +149,7 @@ public class PerfectLink {
                 socket.send(packet);
 
             } catch (IOException e) {
+                e.printStackTrace();
                 throw new LedgerException(ErrorMessage.SocketSendingError);
             }
         }).start();
@@ -168,11 +170,10 @@ public class PerfectLink {
         Message message = new Gson().fromJson(responseData.getMessage(), Message.class);
         if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
                 nodes.get(message.getSenderId()).getPublicKeyPath())) {
-            System.out.println("Invalid signature - IGNORING");
-            message.setType(Message.Type.IGNORE);
+            message.setType(NodeMessage.Type.IGNORE);
             // TODO: get response hostname
             LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - Message {1} from localhost:{2} was incorrectly signed, ignoring",
+                    MessageFormat.format("{0} - NodeMessage {1} from localhost:{2} was incorrectly signed, ignoring",
                             config.getId(), response.getPort()));
             return message;
         }
@@ -183,19 +184,20 @@ public class PerfectLink {
             throw new LedgerException(ErrorMessage.NoSuchNode);
 
         // ACK -> tratar logo
-        if (message.getType().equals(Message.Type.ACK)) {
-            System.out.println("ACK received from " + message.getSenderId() + " currentSeq: "
-                    + sendLink.getSequenceNumber() + " lastAck: " + message.getMessageId());
+        if (message.getType().equals(NodeMessage.Type.ACK)) {
             int lastAck = sendLink.tryUpdateAck(message.getMessageId());
             if (lastAck != message.getMessageId()) {
                 // TODO: get response hostname
                 LOGGER.log(Level.INFO,
-                        MessageFormat.format("{0} - Message {1} from localhost:{2} was out of order, ignoring",
+                        MessageFormat.format("{0} - NodeMessage {1} from localhost:{2} was out of order, ignoring",
                                 config.getId(), message.getType(), response.getPort()));
-                message.setType(Message.Type.IGNORE);
+                message.setType(NodeMessage.Type.IGNORE);
             }
             return message;
         }
+
+        // It's not an ACK -> Deserialize for the correct type
+        message = new Gson().fromJson(responseData.getMessage(), messageClass);
 
         // Normal -> if (nao ha buracos): devolve else: ignora
         if (recvLink.tryUpdateSeq(message.getMessageId()) == message.getMessageId()) {
@@ -204,13 +206,13 @@ public class PerfectLink {
             // Even if a node receives the message multiple times,
             // it will discard duplicates
             try {
-                var address = InetAddress.getByName(recvLink.getSourceNodeConfig().getHostname());
-                var port = recvLink.getSourceNodeConfig().getPort();
+                var address = InetAddress.getByName(response.getAddress().getHostAddress());
+                var port = response.getPort();
                 LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - ACKING {1} - ID {2} message to {3}:{4}", config.getId(),
                             message.getType(), message.getMessageId(), address, port));
                 unreliableSend(address, port,
-                        new Message(this.config.getId(), message.getMessageId(), Message.Type.ACK, new ArrayList<>()));
+                        new Message(this.config.getId(), message.getMessageId(), NodeMessage.Type.ACK));
             } catch (UnknownHostException e) {
                 throw new LedgerException(ErrorMessage.NoSuchNode);
             }
@@ -218,9 +220,9 @@ public class PerfectLink {
         }
         // TODO: get response hostname
         LOGGER.log(Level.INFO,
-                MessageFormat.format("{0} - Message {1} from localhost:{2} was out of order, ignoring",
+                MessageFormat.format("{0} - NodeMessage {1} from localhost:{2} was out of order, ignoring",
                         config.getId(), message.getType(), response.getPort()));
-        message.setType(Message.Type.IGNORE);
+        message.setType(NodeMessage.Type.IGNORE);
         return message;
     }
 }

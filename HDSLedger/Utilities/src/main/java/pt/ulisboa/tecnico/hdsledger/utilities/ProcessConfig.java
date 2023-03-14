@@ -1,6 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.utilities;
 
-public class NodeConfig {
+public class ProcessConfig {
     private boolean isLeader = false;
     private String hostname = "localhost";
     private String id = "id";
@@ -28,7 +28,7 @@ public class NodeConfig {
         this.id = id;
     }
 
-    protected void setPort(int port) {
+    public void setPort(int port) {
         this.port = port;
     }
 

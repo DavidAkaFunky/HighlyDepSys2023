@@ -5,6 +5,8 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ClientConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.ClientConfigBuilder;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 
 import java.util.Arrays;
 import java.util.List;
@@ -13,7 +15,8 @@ import java.util.Scanner;
 
 public class Client {
 
-    private final static String configPath = "../Client/src/main/resources/client_config.json";
+    private final static String clientsConfigPath = "../Client/src/main/resources/client_config.json";
+    private final static String nodesConfigPath = "../Service/src/main/resources/server_config.json";
 
     private static void welcomeText(String clientId) {
         System.out.println("Helcome to the HDS Ledger Client!");
@@ -28,18 +31,26 @@ public class Client {
         // Command line arguments
         final String clientId = args[0];
 
-        // Get all the client configs
-        ClientConfig[] configs = new ClientConfigBuilder().fromFile(configPath);
+        // Get all the client config
+        ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
+
+        ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
         
         // Get the client config
-        Optional<ClientConfig> clientConfig = Arrays.stream(configs).filter(c -> c.getId().equals(clientId)).findFirst();
+        Optional<ProcessConfig> clientConfig = Arrays.stream(clientConfigs).filter(c -> c.getId().equals(clientId)).findFirst();
         if (clientConfig.isEmpty()){
             throw new LedgerException(ErrorMessage.ConfigFileFormat);
         }
-        ClientConfig config = clientConfig.get();
+        ProcessConfig config = clientConfig.get();
         
+        // Allow the client to connect to the server's correct port
+        for (ProcessConfig nodeConfig : nodeConfigs) {
+            nodeConfig.setPort(nodeConfig.getClientPort());
+        }
+
         // Library to interact with the blockchain
-        final Library library = new Library(config);
+        final Library library = new Library(config, nodeConfigs);
+        library.listen();
 
         welcomeText(clientId);
         
@@ -70,8 +81,7 @@ public class Client {
                 }
                 case "read" -> {
                     System.out.println("Reading blockchain...");
-                    List<String> blockchainValues = library.read();
-                    library.printNewBlockchainValues(blockchainValues);
+                    library.read();
                     library.printBlockchain();
                 }
                 case "exit" -> {

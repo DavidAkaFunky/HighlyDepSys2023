@@ -1,17 +1,20 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
 import java.io.Serializable;
-import java.util.List;
 
 public class Message implements Serializable {
-
-    private final String senderId;
+    
+    private String senderId;
     private int messageId;
     private Type type;
-    private List<String> args;
 
     public enum Type {
-        START, PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE, DECIDE, ACK, IGNORE;
+        // For Ledger Requests
+        APPEND, READ,
+        // For Node Messages
+        PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE, DECIDE, ACK, IGNORE,
+        // For Ledger Responses
+        REPLY;
     }
 
     public Message(String senderId, int messageId, Type type) {
@@ -20,19 +23,20 @@ public class Message implements Serializable {
         this.type = type;
     }
 
-    public Message(String senderId, int messageId, Type type, List<String> args) {
-        this.senderId = senderId;
-        this.messageId = messageId;
-        this.type = type;
-        this.args = args;
-    }
-    
     public String getSenderId() {
         return senderId;
     }
 
+    public void setSenderId(String senderId) {
+        this.senderId = senderId;
+    }
+
     public int getMessageId() {
         return messageId;
+    }
+
+    public void setMessageId(int messageId) {
+        this.messageId = messageId;
     }
 
     public Type getType() {
@@ -41,19 +45,6 @@ public class Message implements Serializable {
 
     public void setType(Type type) {
         this.type = type;
-    }
-
-    public void setMessageId(int messageId) {
-        this.messageId = messageId;
-    }
-
-    public List<String> getArgs() {
-        return args;
-    }
-
-    @Override
-    public String toString() {
-        return "Message from " + senderId + " ID: " + messageId + " Content [type = " + type + ", args = " + args + "]";
     }
 
 }

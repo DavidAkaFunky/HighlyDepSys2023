@@ -1,29 +1,29 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
 class SimplexLink {
 
-    private NodeConfig sourceNodeConfig;
+    private ProcessConfig sourceNodeConfig;
 
-    private NodeConfig destinationNodeConfig;
+    private ProcessConfig destinationNodeConfig;
 
     private int sequenceNumber = 0;
     private int lastAckedSeq = 0;
 
-    public NodeConfig getSourceNodeConfig() {
+    public ProcessConfig getSourceNodeConfig() {
         return sourceNodeConfig;
     }
 
-    public void setSourceNodeConfig(NodeConfig sourceNodeConfig) {
+    public void setSourceNodeConfig(ProcessConfig sourceNodeConfig) {
         this.sourceNodeConfig = sourceNodeConfig;
     }
 
-    public NodeConfig getDestinationNodeConfig() {
+    public ProcessConfig getDestinationNodeConfig() {
         return destinationNodeConfig;
     }
 
-    public void setDestinationNodeConfig(NodeConfig destinationNodeConfig) {
+    public void setDestinationNodeConfig(ProcessConfig destinationNodeConfig) {
         this.destinationNodeConfig = destinationNodeConfig;
     }
 
@@ -67,12 +67,12 @@ class SimplexLink {
 public class SimplexLinkBuilder {
     private final SimplexLink instance = new SimplexLink();
 
-    public SimplexLinkBuilder setSourceNodeConfig(NodeConfig nodeConfig) {
+    public SimplexLinkBuilder setSourceNodeConfig(ProcessConfig nodeConfig) {
         instance.setSourceNodeConfig(nodeConfig);
         return this;
     }
 
-    public SimplexLinkBuilder setDestinationNodeConfig(NodeConfig nodeConfig) {
+    public SimplexLinkBuilder setDestinationNodeConfig(ProcessConfig nodeConfig) {
         instance.setDestinationNodeConfig(nodeConfig);
         return this;
     }

@@ -1,11 +1,15 @@
 [
-    {
+    {   
         "id": "5",
+        "hostname": "localhost",
+        "port": 3004,
         "publicKeyPath": "../PKI/client5.pub",
         "privateKeyPath": "../PKI/client5.priv"
     },
     {
         "id": "6",
+        "hostname": "localhost",
+        "port": 3005,
         "publicKeyPath": "../PKI/client6.pub",
         "privateKeyPath": "../PKI/client6.priv"
     }
