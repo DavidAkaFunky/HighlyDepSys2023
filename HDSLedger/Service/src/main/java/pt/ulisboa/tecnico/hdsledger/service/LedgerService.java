@@ -73,14 +73,14 @@ public class LedgerService implements UDPService {
                 }
             }
 
-  
-            if (value.equals(""))
-                return Optional.of(new LedgerResponse(consensusInstance, service.getBlockchainAsList()));
-            else
-                return Optional.of(new LedgerResponse(consensusInstance,
-                        service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
+            LOGGER.log(Level.INFO, "Consensus finished");
+            LOGGER.log(Level.INFO, MessageFormat.format("New blockchain: {0}",service.getBlockchainAsList()));
+
+            return Optional.of(new LedgerResponse(consensusInstance,
+                    service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
         }
 
+        LOGGER.log(Level.INFO, "Not a new request, ignoring");
         return Optional.empty();
     }
 
@@ -167,7 +167,7 @@ public class LedgerService implements UDPService {
                                 }
 
                                 LedgerResponse ledgerResponse = response.get();
-                           
+
                                 String jsonString = new Gson().toJson(ledgerResponse);
                                 Optional<String> signature;
                                 try {

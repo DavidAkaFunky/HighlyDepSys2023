@@ -6,7 +6,6 @@ import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.SignedMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -49,11 +48,20 @@ public class Library {
         return blockchain;
     }
 
+    private List<String> getBlockchainWithoutSpaces(List<String> blockchain) {
+        List<String> blockchainWithoutSpaces = new ArrayList<>();
+        for (String value : blockchain) {
+            if(!value.equals(""))
+                blockchainWithoutSpaces.add(value);
+        }
+        return blockchainWithoutSpaces;
+    }
+
     /*
      * Print the known blockchain content
      */
     public void printBlockchain() {
-        System.out.println("Known blockchain content: " + getBlockchain());
+        System.out.println("Known blockchain content: " + getBlockchainWithoutSpaces(getBlockchain()));
     }
 
     /*
@@ -62,7 +70,7 @@ public class Library {
      * @param blockchainValues the new blockchain content
      */
     public void printNewBlockchainValues(List<String> blockchainValues) {
-        System.out.println("New blockchain content: " + blockchainValues);
+        System.out.println("New blockchain content: " + getBlockchainWithoutSpaces(blockchainValues));
     }
 
     /*
@@ -120,7 +128,6 @@ public class Library {
             socket.receive(response);
             sendThread.interrupt();
 
-            
             // Verify signature
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
             SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
@@ -134,7 +141,6 @@ public class Library {
 
             // Add new values to the blockchain
             List<String> blockchainValues = ledgerResponse.getValues();
-
             blockchain.addAll(ledgerResponse.getValues().stream().toList());
 
             return blockchainValues;
@@ -148,9 +154,7 @@ public class Library {
 
         // Create message to send to blockchain service
         LedgerRequest request = new LedgerRequest(LedgerRequest.LedgerRequestType.READ, this.config.getId(),
-                this.clientSeq++,
-                "",
-                this.blockchain.size());
+                this.clientSeq++, "", this.blockchain.size());
 
         try {
             Thread sendThread = new Thread(() -> {
@@ -195,7 +199,6 @@ public class Library {
             socket.receive(response);
             sendThread.interrupt();
 
-            
             // Verify signature
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
             SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
@@ -207,14 +210,12 @@ public class Library {
             // Deserialize response
             LedgerResponse ledgerResponse = new Gson().fromJson(responseData.getMessage(), LedgerResponse.class);
 
-            // TODO: Only request values from N+1 instance because we already store the values from N instance
-            
             // Add new values to the blockchain
             List<String> blockchainValues = ledgerResponse.getValues();
-            blockchainValues.forEach((value) -> blockchain.add(value));
+            blockchain.addAll(ledgerResponse.getValues().stream().toList());
 
             return blockchainValues;
-            
+
         } catch (IOException e) {
             throw new LedgerException(ErrorMessage.CannotOpenSocket);
         }

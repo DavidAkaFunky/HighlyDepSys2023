@@ -8,6 +8,7 @@ public enum ErrorMessage {
     SocketReceivingError("Error while receiving message"),
     CannotOpenSocket("Error while opening socket"),
     SignatureDoesntMatch("The message signature is not valid"),
+    FailedToSignMessage("Error while signing message"),
     CannotParseMessage("Error while parsing received message");
 
     private final String message;
