@@ -3,8 +3,10 @@ package pt.ulisboa.tecnico.hdsledger.service;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
+import pt.ulisboa.tecnico.hdsledger.utilities.NodeConfig;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,7 +35,7 @@ public class NodeService implements UDPService {
     private int consensusInstance = 0;
     private Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
 
-    private Timer timer = new Timer();
+    private String leaderId;
 
     private PerfectLink link;
 
@@ -43,14 +45,17 @@ public class NodeService implements UDPService {
     // Consensus instance -> Round -> List of commit messages
     private final MessageBucket commitMessages;
 
-    private static final int TIMER_PERIOD = 10000;
+    // Not needed yet
+    // private Timer timer = new Timer();
+    // private static final int TIMER_PERIOD = 10000;
 
-    public NodeService(String nodeId, boolean isLeader, PerfectLink link, int nodeCount) {
+    public NodeService(String nodeId, boolean isLeader, PerfectLink link, String leaderId, int nodesLength) {
         this.isLeader = isLeader;
         this.nodeId = nodeId;
         this.link = link;
-        this.prepareMessages = new MessageBucket(nodeCount);
-        this.commitMessages = new MessageBucket(nodeCount);
+        this.leaderId = leaderId;
+        this.prepareMessages = new MessageBucket(nodesLength);
+        this.commitMessages = new MessageBucket(nodesLength);
     }
 
     public void addBlock(int instance, String block) {
@@ -74,10 +79,11 @@ public class NodeService implements UDPService {
     }
 
     public List<String> getBlockchainStartingAtInstance(int startInstance) {
+
         return getBlockchain()
                 .entrySet()
                 .stream()
-                .filter((Map.Entry<Integer, String> entry) -> (entry.getKey() >= startInstance))
+                .filter((Map.Entry<Integer, String> entry) -> (entry.getKey() > startInstance))
                 .map(Map.Entry::getValue)
                 .collect(Collectors.toList());
     }
@@ -85,13 +91,13 @@ public class NodeService implements UDPService {
     // BIG TODO: What needs to be synchronized?
 
     /*
+     * Start an instance of consensus for value inputValue
+     * Only the current leader will start a consensus instance
+     * the remaining nodes only update values.
      * 
+     * @param inputValue Value to be agreed upon
      */
     public int startConsensus(String inputValue) {
-
-        //NOTE: Client is only sending  request to leader
-        // Meaning that other nodes will not set consensusInstance
-        
 
         // Set initial consensus values
         this.consensusInstance++;
@@ -99,6 +105,7 @@ public class NodeService implements UDPService {
 
         // Leader broadcasts PRE-PREPARE message
         if (isLeader) {
+
             InstanceInfo instance = this.instanceInfo.get(this.consensusInstance);
             List<String> messageArgs = new ArrayList<>();
             messageArgs.add(String.valueOf(this.consensusInstance));
@@ -107,10 +114,13 @@ public class NodeService implements UDPService {
 
             Message prePrepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PRE_PREPARE, messageArgs);
 
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "{0} - Node is leader, sending PRE-PREPARE messages", nodeId));
+
             this.link.broadcast(prePrepareMessage);
         } else {
             LOGGER.log(Level.INFO, MessageFormat.format(
-                    "Node {0} is not leader, waiting for PRE-PREPARE message - THIS SHOULD NOT HAPPEN!", nodeId));
+                    "{0} - Node is not leader, waiting for PRE-PREPARE message", nodeId));
         }
 
         return this.consensusInstance;
@@ -131,43 +141,61 @@ public class NodeService implements UDPService {
     }
 
     /*
+     * Handle pre prepare messages and if the message
+     * came from leader and is justified them broadcast prepare
      * 
+     * @param message Message to be handled
      */
     public void uponPrePrepare(Message message) {
 
-        // TODO: PrePrepare came from leader AND JustifyPrePrepare(m)
+        int consensusInstance = Integer.parseInt(message.getArgs().get(0));
+        int round = Integer.parseInt(message.getArgs().get(1));
+        String value = message.getArgs().get(2);
+        String senderId = message.getSenderId();
 
-        // Start timer
-        // TODO: Cancel previous timer ?
+        if (!messageFromLeader(senderId)) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4} but node is not leader, ignoring",
+                            nodeId, message.getSenderId(), consensusInstance, round, value));
+            return;
+        }
+
+        if (!justifyPrePrepare(consensusInstance, round, value)) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4} but not justified, ignoring",
+                            nodeId, message.getSenderId(), consensusInstance, round, value));
+            return;
+        }
+
+        LOGGER.log(Level.INFO,
+                MessageFormat.format(
+                        "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4}",
+                        nodeId, message.getSenderId(), consensusInstance, round, value));
+
+        Message prepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PREPARE, message.getArgs());
+        this.link.broadcast(prepareMessage);
+
+        // Cancel previous timer and start new one
         /*
          * timer.schedule(
          * new TimerTask() {
          * 
          * @Override
          * public void run() {
-         * System.out.println("Timer ran in uponPrepare, trigger round change");
+         * System.out.println("Timer ran in uponPrePrepare, trigger round change");
          * }
          * },
          * 0,
          * TIMER_PERIOD);
          */
-        int consensusInstance = Integer.parseInt(message.getArgs().get(0));
-        int round = Integer.parseInt(message.getArgs().get(1));
-        String value = message.getArgs().get(2);
-
-        LOGGER.log(Level.INFO,
-                MessageFormat.format(
-                        "{0} - Received PRE-PREPARE message from {1}: Consensus Instance {2}, Round {3}, Value {4}",
-                        nodeId, message.getSenderId(), consensusInstance, round, value));
-
-        if (justifyPrePrepare(consensusInstance, round, value)) {
-            Message prepareMessage = new Message(nodeId, this.messageCount++, Message.Type.PREPARE, message.getArgs());
-            this.link.broadcast(prepareMessage);
-        }
     }
 
     /*
+     * Handle prepare messages and if there is a valid quorum broadcast commit
      * 
+     * @param message Message to be handled
      */
     public void uponPrepare(Message message) {
 
@@ -207,7 +235,9 @@ public class NodeService implements UDPService {
     }
 
     /*
+     * Handle commit messages and if there is a valid quorum decide
      * 
+     * @param message Message to be handled
      */
     public void uponCommit(Message message) {
 
@@ -226,10 +256,8 @@ public class NodeService implements UDPService {
 
         Optional<String> committedValue = commitMessages.hasValidQuorum(consensusInstance, round);
         if (committedValue.isPresent() && (instance == null || instance.getCommittedRound() < round)) {
+
             // this.timer.cancel(); // Not needed for now
-            // this.consensusInstance and this.preparedValue will always be the same as the
-            // ones in the message
-            // Decide(this.consensusInstance, this.preparedValue, Quorum (why?) )
 
             // Add block to blockchain
             while (blockchain.size() < consensusInstance - 1) {
@@ -240,31 +268,43 @@ public class NodeService implements UDPService {
                 }
             }
 
-            // Very weird if it's absent
+            // Should never be absent
             this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
-            System.out.println("Going to add to blockchain");
             String block = committedValue.get();
-            System.out.println("Block: " + block);
             this.addBlock(consensusInstance, block);
+
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "{0} - Decided on Consensus Instance {1}, Round {2}, Value {3}",
+                            nodeId, consensusInstance, round, value));
         }
     }
 
+    /*
+     * NOT IMPLEMENTED
+     */
     void uponRoundChange(Message message) {
         int consensusInstance = Integer.parseInt(message.getArgs().get(0));
         int round = Integer.parseInt(message.getArgs().get(1));
 
         LOGGER.log(Level.INFO,
-                MessageFormat.format("{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, New Round {3}",
+                MessageFormat.format(
+                        "{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, New Round {3}",
                         nodeId, message.getSenderId(), consensusInstance, round));
-        // stage 2
+
+        // NOT IMPLEMENTED
+    }
+
+    private boolean messageFromLeader(String nodeId) {
+        return this.leaderId.equals(nodeId);
     }
 
     private boolean justifyPrePrepare(int consensusInstance, int round, String value) {
-        // TODO: There is no round change, so this is a primitive version of the
-        // jusitification
+        // Round change is not implemented, therefore pre prepare should always be from
+        // round 1
         return round == 1;
     }
 

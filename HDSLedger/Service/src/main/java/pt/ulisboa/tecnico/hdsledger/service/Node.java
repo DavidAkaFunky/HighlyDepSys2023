@@ -25,6 +25,10 @@ public class Node {
 
             // TODO: Distinguish by server/client
             NodeConfig[] nodes = new NodeConfigBuilder().fromFile(CONFIG);
+
+            // Find leader id
+            String leaderId = Arrays.stream(nodes).filter(NodeConfig::isLeader).findAny().get().getId();
+
             // TODO: change this
             Optional<NodeConfig> config = Arrays.stream(nodes).filter(nodeConfig -> nodeConfig.getId().equals(id))
                     .findAny();
@@ -39,8 +43,8 @@ public class Node {
             // Abstraction to send and receive messages
             PerfectLink link = new PerfectLink(nodeConfig, nodes);
 
-            // Services that implement listen from UDPService
-            NodeService nodeService = new NodeService(id, nodeConfig.isLeader(), link, nodes.length);
+            // Services that implement listen() from UDPService
+            NodeService nodeService = new NodeService(id, nodeConfig.isLeader(), link, leaderId, nodes.length);
             LedgerService ledgerService = new LedgerService(nodeConfig, nodeService);
 
             nodeService.listen();

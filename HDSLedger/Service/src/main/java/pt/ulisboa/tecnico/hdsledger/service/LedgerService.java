@@ -51,14 +51,11 @@ public class LedgerService implements UDPService {
 
         // Check if client has already sent this request
         clientRequests.putIfAbsent(clientId, ConcurrentHashMap.newKeySet());
-        System.out.println("VALUE ALREADY EXISTS: " + clientRequests.get(clientId).contains(clientSeq));
         boolean isNewMessage = clientRequests.get(clientId).add(clientSeq);
 
         LOGGER.log(Level.INFO, "Request for consensus");
 
         if (isNewMessage) {
-
-            System.out.println("client sequence:" + clientSeq);
             LOGGER.log(Level.INFO, "Starting consensus");
 
             // Start consensus instance
@@ -79,18 +76,14 @@ public class LedgerService implements UDPService {
                     break;
             }
 
-            System.out.println("Consensus finished");
-            System.out.println(service.getBlockchain().values());
-            System.out.println(service.getBlockchainAsList());
-            System.out.println(service.getBlockchainStartingAtInstance(consensusInstance));
+            LOGGER.log(Level.INFO, "Consensus finished");
+            LOGGER.log(Level.INFO, MessageFormat.format("New blockchain: {0}",service.getBlockchainAsList()));
 
-            if (value.equals(""))
-                return Optional.of(new LedgerResponse(consensusInstance, service.getBlockchainAsList()));
-            else
-                return Optional.of(new LedgerResponse(consensusInstance,
-                        service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
+            return Optional.of(new LedgerResponse(consensusInstance,
+                    service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
         }
 
+        LOGGER.log(Level.INFO, "Not a new request, ignoring");
         return Optional.empty();
     }
 
@@ -177,9 +170,6 @@ public class LedgerService implements UDPService {
                                 }
 
                                 LedgerResponse ledgerResponse = response.get();
-                                System.out.println("Ledger response:");
-                                System.out.println(ledgerResponse.getConsensusInstance());
-                                System.out.println(ledgerResponse.getValues());
 
                                 String jsonString = new Gson().toJson(ledgerResponse);
                                 Optional<String> signature;
