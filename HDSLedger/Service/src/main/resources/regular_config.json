@@ -6,7 +6,8 @@
         "port": 3000,
         "clientPort": 4000,
         "publicKeyPath": "../PKI/node1.pub",
-        "privateKeyPath": "../PKI/node1.priv"
+        "privateKeyPath": "../PKI/node1.priv",
+        "byzantineBehavior": "NONE"
     },
     {
         "id": "2",
@@ -15,7 +16,8 @@
         "port": 3001,
         "clientPort": 4001,
         "publicKeyPath": "../PKI/node2.pub",
-        "privateKeyPath": "../PKI/node2.priv"
+        "privateKeyPath": "../PKI/node2.priv",
+        "byzantineBehavior": "NONE"
     },
     {
         "id": "3",
@@ -24,7 +26,8 @@
         "port": 3002,
         "clientPort": 4002,
         "publicKeyPath": "../PKI/node3.pub",
-        "privateKeyPath": "../PKI/node3.priv"
+        "privateKeyPath": "../PKI/node3.priv",
+        "byzantineBehavior": "NONE"
     },
     {
         "id": "4",
@@ -33,6 +36,7 @@
         "port": 3003,
         "clientPort": 4003,
         "publicKeyPath": "../PKI/node4.pub",
-        "privateKeyPath": "../PKI/node4.priv"
+        "privateKeyPath": "../PKI/node4.priv",
+        "byzantineBehavior": "NONE"
     }
 ]

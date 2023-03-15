@@ -17,21 +17,19 @@ import java.util.logging.Level;
 public class Node {
 
     private static final CustomLogger LOGGER = new CustomLogger(Node.class.getName());
-    private static final String NODE_CONFIG = "src/main/resources/server_config.json";
+    private static String NODE_CONFIG = "src/main/resources/";
     private static final String CLIENT_CONFIG = "../Client/src/main/resources/client_config.json";
-    // TODO: Add configs to a common folder (PKI for example?)
 
     public static void main(String[] args) {
-        
+
         try {
             // Single command line argument (id)
             String id = args[0];
+            NODE_CONFIG += args[1];
 
-            // TODO: Distinguish by server/client
             ProcessConfig[] otherNodes = new ProcessConfigBuilder().fromFile(NODE_CONFIG);
             String leaderId = Arrays.stream(otherNodes).filter(ProcessConfig::isLeader).findAny().get().getId();
 
-            // TODO: change this
             Optional<ProcessConfig> node = Arrays.stream(otherNodes).filter(nodeConfig -> nodeConfig.getId().equals(id))
                     .findAny();
 
@@ -39,17 +37,25 @@ public class Node {
                 throw new LedgerException(ErrorMessage.ConfigFileFormat);
 
             ProcessConfig nodeConfig = node.get();
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2}; is leader: {3}", nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort(),
-                            nodeConfig.isLeader()));
+            // BYZANTINE_TESTS
+            // BAD_CONSENSUS: Forget the actual leader and pretend to be the actual leader
+            if (nodeConfig.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.BAD_CONSENSUS) {
+                Arrays.stream(otherNodes).filter(ProcessConfig::isLeader).forEach(n -> n.setLeader(false));
+                nodeConfig.setLeader(true);
+            }
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Running at {1}:{2}; behaviour: {3}; is leader: {4}",
+                    nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort(),
+                    nodeConfig.getByzantineBehavior(), nodeConfig.isLeader()));
 
             ProcessConfig[] clients = new ProcessConfigBuilder().fromFile(CLIENT_CONFIG);
 
             // Abstraction to send and receive messages
             PerfectLink linkToNodes = new PerfectLink(nodeConfig, nodeConfig.getPort(), otherNodes, NodeMessage.class);
-            PerfectLink linkToClients = new PerfectLink(nodeConfig, nodeConfig.getClientPort(), clients, LedgerRequest.class);
+            PerfectLink linkToClients = new PerfectLink(nodeConfig, nodeConfig.getClientPort(), clients,
+                    LedgerRequest.class);
 
             // Services that implement listen from UDPService
-            NodeService nodeService = new NodeService(id, nodeConfig.isLeader(), linkToNodes, leaderId, otherNodes.length);
+            NodeService nodeService = new NodeService(nodeConfig, linkToNodes, leaderId, otherNodes.length);
             LedgerService ledgerService = new LedgerService(id, nodeService, linkToClients);
 
             nodeService.listen();

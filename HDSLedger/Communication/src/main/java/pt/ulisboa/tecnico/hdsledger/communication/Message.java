@@ -10,16 +10,15 @@ public class Message implements Serializable {
 
     public enum Type {
         // For Ledger Requests
-        APPEND, READ,
+        REQUEST,
         // For Node Messages
         PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE, DECIDE, ACK, IGNORE,
         // For Ledger Responses
         REPLY;
     }
 
-    public Message(String senderId, int messageId, Type type) {
+    public Message(String senderId, Type type) {
         this.senderId = senderId;
-        this.messageId = messageId;
         this.type = type;
     }
 

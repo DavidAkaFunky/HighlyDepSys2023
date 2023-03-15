@@ -8,10 +8,6 @@ import java.util.logging.Logger;
 
 public class CustomLogger {
 
-    /* (non-Javadoc)
-        * @see java.util.logging.Formatter#format(java.util.logging.LogRecord)
-        */
-
     private static Logger LOGGER;
 
     public CustomLogger(String name) {

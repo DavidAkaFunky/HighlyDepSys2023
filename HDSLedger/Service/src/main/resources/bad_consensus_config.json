@@ -1,0 +1,72 @@
+[
+    {   
+        "id": "1",
+        "isLeader": true,
+        "hostname": "localhost",
+        "port": 3000,
+        "clientPort": 4000,
+        "publicKeyPath": "../PKI/node1.pub",
+        "privateKeyPath": "../PKI/node1.priv",
+        "byzantineBehavior": "NONE"
+    },
+    {
+        "id": "2",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3001,
+        "clientPort": 4001,
+        "publicKeyPath": "../PKI/node2.pub",
+        "privateKeyPath": "../PKI/node2.priv",
+        "byzantineBehavior": "BAD_CONSENSUS"
+    },
+    {
+        "id": "3",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3002,
+        "clientPort": 4002,
+        "publicKeyPath": "../PKI/node3.pub",
+        "privateKeyPath": "../PKI/node3.priv",
+        "byzantineBehavior": "PASSIVE"
+    },
+    {
+        "id": "4",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3003,
+        "clientPort": 4003,
+        "publicKeyPath": "../PKI/node4.pub",
+        "privateKeyPath": "../PKI/node4.priv",
+        "byzantineBehavior": "NONE"
+    },
+    {
+        "id": "5",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3004,
+        "clientPort": 4004,
+        "publicKeyPath": "../PKI/node5.pub",
+        "privateKeyPath": "../PKI/node5.priv",
+        "byzantineBehavior": "NONE"
+    },
+    {
+        "id": "6",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3005,
+        "clientPort": 4005,
+        "publicKeyPath": "../PKI/node6.pub",
+        "privateKeyPath": "../PKI/node6.priv",
+        "byzantineBehavior": "NONE"
+    },
+    {
+        "id": "7",
+        "isLeader": false,
+        "hostname": "localhost",
+        "port": 3006,
+        "clientPort": 4006,
+        "publicKeyPath": "../PKI/node7.pub",
+        "privateKeyPath": "../PKI/node7.priv",
+        "byzantineBehavior": "NONE"
+    }
+]

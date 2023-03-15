@@ -10,34 +10,46 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Library {
 
     private static final CustomLogger LOGGER = new CustomLogger(Library.class.getName());
-    private static final String CONFIG = "../Service/src/main/resources/server_config.json";
-
     // Config details of node leader
     private final ProcessConfig leader;
     // Known blockchain
     private final List<String> blockchain = new ArrayList<>();
     // Client identifier
     private final ProcessConfig config;
-    // Message sequence number
-    private int messageId = 1;
     // Link to communicate with blockchain nodes
     private PerfectLink link;
     // Map of responses from nodes
     private final Map<Integer, LedgerResponse> responses = new HashMap<>();
+    // Current request ID
+    private AtomicInteger requestId = new AtomicInteger(0);
 
-    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs) throws LedgerException {
+    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs) {
+        this(clientConfig, nodeConfigs, true);
+    }
+
+    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, boolean activateLogs)
+            throws LedgerException {
+
         this.config = clientConfig;
-        // Get leader from config file
-        Optional<ProcessConfig> leader = Arrays.stream(new ProcessConfigBuilder().fromFile(CONFIG))
-                .filter(ProcessConfig::isLeader).findFirst();
+
+        // Get leader from nodes information
+        Optional<ProcessConfig> leader = Arrays.stream(nodeConfigs).filter(ProcessConfig::isLeader).findFirst();
         if (leader.isEmpty())
             throw new LedgerException(ErrorMessage.ConfigFileFormat);
         this.leader = leader.get();
-        this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class);
+        
+        this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class,
+                activateLogs);
+
+        if (!activateLogs) {
+            LogManager.getLogManager().reset();
+        }
     }
 
     public List<String> getBlockchain() {
@@ -47,7 +59,7 @@ public class Library {
     private List<String> getBlockchainWithoutSpaces(List<String> blockchain) {
         List<String> blockchainWithoutSpaces = new ArrayList<>();
         for (String value : blockchain) {
-            if(!value.equals(""))
+            if (!value.equals(""))
                 blockchainWithoutSpaces.add(value);
         }
         return blockchainWithoutSpaces;
@@ -77,11 +89,7 @@ public class Library {
      */
     public List<String> append(String value) {
 
-        // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.APPEND, this.config.getId(),
-                this.messageId++, value, this.blockchain.size());
-        
-        return requestBlockchainOperation(request);
+        return requestBlockchainOperation(value);
     }
 
     /*
@@ -92,22 +100,23 @@ public class Library {
      */
     public void read() {
 
-        // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.APPEND, this.config.getId(),
-                this.messageId++, "", this.blockchain.size());
-        
-        requestBlockchainOperation(request);
+        requestBlockchainOperation("");
     }
 
-    public List<String> requestBlockchainOperation(LedgerRequest request) {
+    public List<String> requestBlockchainOperation(String value) {
 
-        link.broadcast(request);
+        int currentRequestId = this.requestId.getAndIncrement();
+
+        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.REQUEST, this.config.getId(), currentRequestId,
+                value, this.blockchain.size());
+
+        this.link.broadcast(request);
 
         LedgerResponse ledgerResponse;
 
-        while ((ledgerResponse = responses.get(request.getMessageId())) == null) {
+        while ((ledgerResponse = responses.get(currentRequestId)) == null) {
             try {
-                Thread.sleep(100);
+                Thread.sleep(1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
@@ -117,7 +126,7 @@ public class Library {
         List<String> blockchainValues = ledgerResponse.getValues();
         blockchain.addAll(ledgerResponse.getValues().stream().toList());
 
-        responses.remove(request.getMessageId());
+        responses.remove(currentRequestId);
         return blockchainValues;
 
     }
@@ -132,31 +141,29 @@ public class Library {
                     while (true) {
                         Message message = link.receive();
                         // Separate thread to handle each message
-                        new Thread(() -> {
-                            switch (message.getType()) {
-                                case REPLY -> {
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("Received REPLY message from {0}",
-                                                    message.getSenderId()));
-                                    System.out.println("Leader: " + leader.getId() + " Sender: " + message.getSenderId());
-                                    if (!message.getSenderId().equals(leader.getId()))
-                                        return;
-                                    LedgerResponse response = (LedgerResponse) message;
-                                    // Add new values to the blockchain
-                                    responses.put(message.getMessageId(), response);
-                                }
-                                case ACK -> {
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("Received ACK message from {0}",
-                                                    message.getSenderId()));
-                                    return;
-                                }
-                                default -> {
-                                    throw new LedgerException(ErrorMessage.CannotParseMessage);
-                                }
-                            }
+                        switch (message.getType()) {
+                            case REPLY -> {
+                                LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} - Received REPLY message from {1}",
+                                                config.getId(), message.getSenderId()));
 
-                        }).start();
+                                // Ignore replies from non-leader nodes
+                                if (!message.getSenderId().equals(leader.getId()))
+                                    continue;
+
+                                // Add new values to the blockchain
+                                LedgerResponse response = (LedgerResponse) message;
+                                responses.put(response.getRequestId(), response);
+                            }
+                            case ACK -> {
+                                LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} - Received ACK {1} message from {2}",
+                                                config.getId(), message.getMessageId(), message.getSenderId()));
+                            }
+                            default -> {
+                                throw new LedgerException(ErrorMessage.CannotParseMessage);
+                            }
+                        }
                     }
                 } catch (IOException | ClassNotFoundException e) {
                     e.printStackTrace();
@@ -166,75 +173,5 @@ public class Library {
             e.printStackTrace();
         }
     }
-
-    /* public List<String> read() throws LedgerException {
-
-        // Create message to send to blockchain service
-        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.READ, this.config.getId(), this.messageId++,
-                "",
-                this.blockchain.size());
-
-        try {
-            Thread sendThread = new Thread(() -> {
-                for (;;) {
-                    try {
-                        InetAddress address = InetAddress.getByName(leader.getHostname());
-
-                        int port = leader.getClientPort();
-
-                        // Sign message
-                        String jsonString = new Gson().toJson(request);
-                        Optional<String> signature;
-                        try {
-                            signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                            throw new RuntimeException();
-                        }
-
-                        // Create UDP packet
-                        SignedMessage message = new SignedMessage(jsonString, signature.get());
-                        byte[] serializedMessage = new Gson().toJson(message).getBytes();
-                        DatagramPacket packet = new DatagramPacket(serializedMessage, serializedMessage.length, address,
-                                port);
-
-                        // Send packet
-                        socket.send(packet);
-                        Thread.sleep(100);
-                    } catch (IOException e) {
-                        throw new LedgerException(ErrorMessage.SocketSendingError);
-                    } catch (InterruptedException e) {
-                        break;
-                    }
-                }
-            });
-            sendThread.start();
-
-            // Receive response
-            DatagramPacket response = new DatagramPacket(new byte[1024], 1024);
-            socket.receive(response);
-            sendThread.interrupt();
-
-            // Verify signature
-            byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
-            SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
-            if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
-                    leader.getPublicKeyPath())) {
-                throw new LedgerException(ErrorMessage.SignatureDoesntMatch);
-            }
-
-            // Deserialize response
-            LedgerResponse ledgerResponse = new Gson().fromJson(responseData.getMessage(), LedgerResponse.class);
-
-            // Add new values to the blockchain
-            List<String> blockchainValues = ledgerResponse.getValues();
-            blockchain.addAll(ledgerResponse.getValues().stream().toList());
-
-            return blockchainValues;
-
-        } catch (IOException e) {
-            throw new LedgerException(ErrorMessage.CannotOpenSocket);
-        }
-    } */
 
 }
