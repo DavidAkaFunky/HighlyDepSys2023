@@ -1,16 +1,38 @@
 package pt.ulisboa.tecnico.hdsledger.utilities;
 
 public class ProcessConfig {
-    private boolean isLeader = false;
-    private String hostname = "localhost";
-    private String id = "id";
-    private int port = 0;
 
-    private int clientPort = 0;
+    private boolean isLeader;
+
+    private String hostname;
+
+    private String id;
+    
+    private int port;
+
+    private int clientPort;
 
     private String publicKeyPath;
 
     private String privateKeyPath;
+
+    private ByzantineBehavior byzantineBehavior = ByzantineBehavior.NONE;
+
+    public enum ByzantineBehavior {
+        NONE("NONE"), 
+        PASSIVE("PASSIVE"),
+        DROP("DROP"), 
+        FAKE_LEADER("FAKE_LEADER"), 
+        FAKE_VALUE("FAKE_VALUE"),
+        BAD_BROADCAST("BAD_BROADCAST"),
+        BAD_CONSENSUS("BAD_CONSENSUS");
+
+        String behavior;
+
+        ByzantineBehavior(String s) {
+            this.behavior = s;
+        }
+    }
 
     public boolean isLeader() {
         return isLeader;
@@ -40,7 +62,7 @@ public class ProcessConfig {
         this.hostname = hostname;
     }
 
-    protected void setLeader(boolean leader) {
+    public void setLeader(boolean leader) {
         this.isLeader = leader;
     }
 
@@ -59,4 +81,13 @@ public class ProcessConfig {
     public String getPrivateKeyPath() {
         return privateKeyPath;
     }
+    
+    public void setByzantineBehavior(ByzantineBehavior byzantineBehavior) {
+        this.byzantineBehavior = byzantineBehavior;
+    }
+
+    public ByzantineBehavior getByzantineBehavior() {
+        return byzantineBehavior;
+    }
+
 }

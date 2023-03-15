@@ -37,14 +37,11 @@ public class LedgerService implements UDPService {
 
         // Check if client has already sent this request
         clientRequests.putIfAbsent(clientId, ConcurrentHashMap.newKeySet());
-        System.out.println("VALUE ALREADY EXISTS: " + clientRequests.get(clientId).contains(messageId));
         boolean isNewMessage = clientRequests.get(clientId).add(messageId);
 
         LOGGER.log(Level.INFO, "Request for consensus");
 
         if (isNewMessage) {
-
-            System.out.println("client sequence:" + messageId);
             LOGGER.log(Level.INFO, "Starting consensus");
 
             // Start consensus instance
@@ -53,8 +50,6 @@ public class LedgerService implements UDPService {
             for (;;) {
                 // Wait for consensus to finish
                 blockchain = service.getBlockchain();
-                System.out.println("BLOCKCHAIN SIZE: " + blockchain.size());
-                System.out.println("CONSENSUS INSTANCE: " + consensusInstance);
                 try {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {
@@ -64,13 +59,13 @@ public class LedgerService implements UDPService {
                     break;
             }
 
-            LOGGER.log(Level.INFO, "Consensus finished");
-            LOGGER.log(Level.INFO, MessageFormat.format("New blockchain: {0}",service.getBlockchainAsList()));
+            LOGGER.log(Level.INFO,  MessageFormat.format("{0} - Consensus finished", nodeId));
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - New blockchain: {1}", nodeId, service.getBlockchainAsList()));
 
             return Optional.of(new LedgerResponse(nodeId, requestId, consensusInstance, service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
         }
 
-        LOGGER.log(Level.INFO, "Not a new request, ignoring");
+        LOGGER.log(Level.INFO, "Already started consensus for this request, ignoring");
         return Optional.empty();
     }
 
@@ -118,7 +113,6 @@ public class LedgerService implements UDPService {
                                     return;
                                 }
                                 default -> {
-                                    System.out.println(message.getType());
                                     throw new LedgerException(ErrorMessage.CannotParseMessage);
                                 }
                             }

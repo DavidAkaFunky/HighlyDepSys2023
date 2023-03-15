@@ -10,13 +10,12 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.logging.Level;
+import java.util.logging.LogManager;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Library {
 
     private static final CustomLogger LOGGER = new CustomLogger(Library.class.getName());
-    private static final String CONFIG = "../Service/src/main/resources/server_config.json";
-
     // Config details of node leader
     private final ProcessConfig leader;
     // Known blockchain
@@ -30,15 +29,27 @@ public class Library {
     // Current request ID
     private AtomicInteger requestId = new AtomicInteger(0);
 
-    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs) throws LedgerException {
+    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs) {
+        this(clientConfig, nodeConfigs, true);
+    }
+
+    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, boolean activateLogs)
+            throws LedgerException {
+
         this.config = clientConfig;
-        // Get leader from config file
-        Optional<ProcessConfig> leader = Arrays.stream(new ProcessConfigBuilder().fromFile(CONFIG))
-                .filter(ProcessConfig::isLeader).findFirst();
+
+        // Get leader from nodes information
+        Optional<ProcessConfig> leader = Arrays.stream(nodeConfigs).filter(ProcessConfig::isLeader).findFirst();
         if (leader.isEmpty())
             throw new LedgerException(ErrorMessage.ConfigFileFormat);
         this.leader = leader.get();
-        this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class);
+        
+        this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class,
+                activateLogs);
+
+        if (!activateLogs) {
+            LogManager.getLogManager().reset();
+        }
     }
 
     public List<String> getBlockchain() {
@@ -48,7 +59,7 @@ public class Library {
     private List<String> getBlockchainWithoutSpaces(List<String> blockchain) {
         List<String> blockchainWithoutSpaces = new ArrayList<>();
         for (String value : blockchain) {
-            if(!value.equals(""))
+            if (!value.equals(""))
                 blockchainWithoutSpaces.add(value);
         }
         return blockchainWithoutSpaces;
@@ -96,9 +107,10 @@ public class Library {
 
         int currentRequestId = this.requestId.getAndIncrement();
 
-        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.REQUEST, this.config.getId(), currentRequestId, value, this.blockchain.size());
+        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.REQUEST, this.config.getId(), currentRequestId,
+                value, this.blockchain.size());
 
-        link.broadcast(request);
+        this.link.broadcast(request);
 
         LedgerResponse ledgerResponse;
 
@@ -132,19 +144,21 @@ public class Library {
                         switch (message.getType()) {
                             case REPLY -> {
                                 LOGGER.log(Level.INFO,
-                                        MessageFormat.format("Received REPLY message from {0}",
-                                                message.getSenderId()));
-                                                
+                                        MessageFormat.format("{0} - Received REPLY message from {1}",
+                                                config.getId(), message.getSenderId()));
+
+                                // Ignore replies from non-leader nodes
                                 if (!message.getSenderId().equals(leader.getId()))
                                     continue;
-                                LedgerResponse response = (LedgerResponse) message;
+
                                 // Add new values to the blockchain
+                                LedgerResponse response = (LedgerResponse) message;
                                 responses.put(response.getRequestId(), response);
                             }
                             case ACK -> {
                                 LOGGER.log(Level.INFO,
-                                        MessageFormat.format("Received ACK {0} message from {1}",
-                                                message.getMessageId(), message.getSenderId()));
+                                        MessageFormat.format("{0} - Received ACK {1} message from {2}",
+                                                config.getId(), message.getMessageId(), message.getSenderId()));
                             }
                             default -> {
                                 throw new LedgerException(ErrorMessage.CannotParseMessage);

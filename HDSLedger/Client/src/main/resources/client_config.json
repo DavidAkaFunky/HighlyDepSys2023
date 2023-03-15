@@ -1,16 +1,16 @@
 [
     {   
-        "id": "5",
+        "id": "10",
         "hostname": "localhost",
-        "port": 3004,
-        "publicKeyPath": "../PKI/client5.pub",
-        "privateKeyPath": "../PKI/client5.priv"
+        "port": 3009,
+        "publicKeyPath": "../PKI/client10.pub",
+        "privateKeyPath": "../PKI/client10.priv"
     },
     {
-        "id": "6",
+        "id": "11",
         "hostname": "localhost",
-        "port": 3005,
-        "publicKeyPath": "../PKI/client6.pub",
-        "privateKeyPath": "../PKI/client6.priv"
+        "port": 3010,
+        "publicKeyPath": "../PKI/client11.pub",
+        "privateKeyPath": "../PKI/client11.priv"
     }
 ]

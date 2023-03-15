@@ -5,6 +5,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig.ByzantineBehavior;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -15,13 +16,15 @@ import java.net.SocketException;
 import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
-
+import java.util.logging.LogManager;
+import java.util.UUID;
 
 import com.google.gson.Gson;
 
@@ -34,7 +37,7 @@ public class PerfectLink {
     private final DatagramSocket socket;
     // Map of all nodes in the network
     private final Map<String, ProcessConfig> nodes = new ConcurrentHashMap<>();
-    // Set of received messages from specifi node (prevent duplicates)
+    // Set of received messages from specific node (prevent duplicates)
     private Map<String, Set<Integer>> receivedMessages = new ConcurrentHashMap<>();
     // Set of received ACKs from specific node
     private Set<Integer> receivedAcks = ConcurrentHashMap.newKeySet();
@@ -46,6 +49,11 @@ public class PerfectLink {
     private final Class<? extends Message> messageClass;
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
+        this(self, port, nodes, messageClass, true);
+    }
+
+    public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
+            boolean activateLogs) {
         this.config = self;
         this.messageClass = messageClass;
         Arrays.stream(nodes).forEach(node -> {
@@ -58,6 +66,9 @@ public class PerfectLink {
             this.socket = new DatagramSocket(port, InetAddress.getByName(config.getHostname()));
         } catch (UnknownHostException | SocketException e) {
             throw new LedgerException(ErrorMessage.CannotOpenSocket);
+        }
+        if (!activateLogs) {
+            LogManager.getLogManager().reset();
         }
     }
 
@@ -72,6 +83,24 @@ public class PerfectLink {
     }
 
     /*
+     * BYZANTINE_TESTS
+     * Broadcast a different value for each node in the network
+     * Used to test resiliency to Byzantine behavior
+     * 
+     * @param data The message to be broadcasted
+     */
+    public void badBroadcast(NodeMessage data) {
+        Gson gson = new Gson();
+        nodes.forEach((destId, dest) -> {
+            NodeMessage badData = gson.fromJson(gson.toJson(data), data.getClass());
+            List<String> args = badData.getArgs();
+            args.set(args.size() - 1, "BYZANTINE_VALUE_" + UUID.randomUUID().toString().replace("_", ""));
+            badData.setArgs(args);
+            send(destId, badData);
+        });
+    }
+
+    /*
      * Sends a message to a specific node with guarantee of delivery
      *
      * @param nodeId The node identifier
@@ -79,6 +108,7 @@ public class PerfectLink {
      * @param data The message to be sent
      */
     public void send(String nodeId, Message data) {
+
         // Spawn a new thread to send the message
         // To avoid blocking while waiting for ACK
         new Thread(() -> {
@@ -135,7 +165,6 @@ public class PerfectLink {
 
                 // Sign message
                 String jsonString = new Gson().toJson(data);
-                System.out.println(data.getMessageId() + " SENDING: " + jsonString);
                 Optional<String> signature;
                 try {
                     signature = Optional.of(RSAEncryption.sign(jsonString, config.getPrivateKeyPath()));
@@ -172,16 +201,17 @@ public class PerfectLink {
         byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
         SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
         Message message = new Gson().fromJson(responseData.getMessage(), Message.class);
-        System.out.println("RECEIVED: " + new Gson().toJson(message));
 
-        // Verify signature
-        if (!RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
+        // Verify signature (byzantine nodes will avoid it to cooperate with each other)
+        // BYZANTINE_TESTS
+        // Any byzantine node will not verify signatures
+        if (config.getByzantineBehavior() == ByzantineBehavior.NONE && !RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
                 nodes.get(message.getSenderId()).getPublicKeyPath())) {
             message.setType(NodeMessage.Type.IGNORE);
-            // TODO: get response hostname
+       
             LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - NodeMessage {1} from localhost:{2} was incorrectly signed, ignoring",
-                            config.getId(), response.getPort()));
+                    MessageFormat.format("{0} - NodeMessage {1} from {2}:{3} was incorrectly signed, ignoring",
+                            config.getId(), response.getAddress(), response.getPort()));
             return message;
         }
 
@@ -191,7 +221,8 @@ public class PerfectLink {
         if (!nodes.containsKey(senderId))
             throw new LedgerException(ErrorMessage.NoSuchNode);
 
-        // Handle ACKS, since it's possible to receive multiple acks from the same message
+        // Handle ACKS, since it's possible to receive multiple acks from the same
+        // message
         if (message.getType().equals(NodeMessage.Type.ACK)) {
             receivedAcks.add(messageId);
             return message;

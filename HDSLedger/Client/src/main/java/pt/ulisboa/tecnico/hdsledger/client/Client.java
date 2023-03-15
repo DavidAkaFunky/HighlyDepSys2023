@@ -14,12 +14,12 @@ import java.util.Scanner;
 public class Client {
 
     private final static String clientsConfigPath = "../Client/src/main/resources/client_config.json";
-    private final static String nodesConfigPath = "../Service/src/main/resources/server_config.json";
+    private static String nodesConfigPath = "../Service/src/main/resources/";
 
     private static void welcomeText(String clientId) {
-        System.out.println("Helcome to the HDS Ledger Client!");
+        System.out.println("Welcome to the HDS Ledger Client!");
         System.out.println("Your client ID is: " + clientId);
-        System.out.println("Type 'write <value>' to write a value to the blockchain.");
+        System.out.println("Type 'append <value>' to append a string to the blockchain.");
         System.out.println("Type 'read' to read the blockchain.");
         System.out.println("Type 'exit' to exit the program.");
     }
@@ -28,10 +28,14 @@ public class Client {
 
         // Command line arguments
         final String clientId = args[0];
+        nodesConfigPath += args[1];
+        boolean showDebugLogs = false;
+        if(args.length == 3){
+            showDebugLogs = args[2].equals("-debug");
+        }
 
         // Get all the client config
         ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
-
         ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
         
         // Get the client config
@@ -47,9 +51,10 @@ public class Client {
         }
 
         // Library to interact with the blockchain
-        final Library library = new Library(config, nodeConfigs);
+        final Library library = new Library(config, nodeConfigs, showDebugLogs);
         library.listen();
 
+        // Initial text
         welcomeText(clientId);
         
         final Scanner scanner = new Scanner(System.in);
@@ -67,9 +72,9 @@ public class Client {
             String[] tokens = line.split(" ");
 
             switch (tokens[0]) {
-                case "write" -> {
+                case "append" -> {
                     if (tokens.length == 2) {
-                        System.out.println("Writing " + tokens[1] + " to blockchain...");
+                        System.out.println("Appending " + tokens[1] + " to blockchain...");
                         List<String> blockchainValues = library.append(tokens[1]);
                         library.printNewBlockchainValues(blockchainValues);
                         library.printBlockchain();

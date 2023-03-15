@@ -19,6 +19,10 @@ public class NodeMessage extends Message {
         return args;
     }
 
+    public void setArgs(List<String> args) {
+        this.args = args;
+    }
+
     @Override
     public String toString() {
         return "NodeMessage from " + getSenderId() + " ID: " + getMessageId() + " Content [type = " + getType() + ", args = " + args + "]";
