@@ -5,6 +5,8 @@ import java.util.List;
 public class NodeMessage extends Message {
 
     private List<String> args;
+    private String clientId;
+    private String valueSignature;
 
     public NodeMessage(String senderId, Type type) {
         super(senderId, type);
@@ -21,6 +23,22 @@ public class NodeMessage extends Message {
 
     public void setArgs(List<String> args) {
         this.args = args;
+    }
+
+    public String getValueSignature() {
+        return valueSignature;
+    }
+
+    public void setValueSignature(String valueSignature) {
+        this.valueSignature = valueSignature;
+    }
+
+    public String getClientId() {
+        return clientId;
+    }
+
+    public void setClientId(String clientId) {
+        this.clientId = clientId;
     }
 
     @Override

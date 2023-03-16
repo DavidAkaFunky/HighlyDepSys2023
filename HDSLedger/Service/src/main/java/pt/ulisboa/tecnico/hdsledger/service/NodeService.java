@@ -1,14 +1,17 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.NodeMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,6 +25,8 @@ import java.util.stream.Collectors;
 public class NodeService implements UDPService {
 
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
+
+    private ProcessConfig[] clientsConfig;
 
     // Store strings
     private final Map<Integer, String> blockchain = new ConcurrentHashMap<>();
@@ -48,7 +53,9 @@ public class NodeService implements UDPService {
     // private Timer timer = new Timer();
     // private static final int TIMER_PERIOD = 10000;
 
-    public NodeService(ProcessConfig config, PerfectLink link, String leaderId, int nodesLength) {
+    public NodeService(ProcessConfig[] clientsConfig, ProcessConfig config, PerfectLink link, String leaderId,
+            int nodesLength) {
+        this.clientsConfig = clientsConfig;
         this.config = config;
         this.link = link;
         this.leaderId = leaderId;
@@ -96,7 +103,11 @@ public class NodeService implements UDPService {
      * 
      * @param inputValue Value to be agreed upon
      */
-    public int startConsensus(String inputValue) {
+    public int startConsensus(LedgerRequest request) {
+
+        String inputValue = request.getArg();
+        String inputValueSignature = request.getClientSignature();
+        String clientId = request.getSenderId();
 
         // Set initial consensus values
         int localConsensusInstance = this.consensusInstance.incrementAndGet();
@@ -119,6 +130,8 @@ public class NodeService implements UDPService {
             messageArgs.add(instance.getInputValue());
 
             NodeMessage prePrepareMessage = new NodeMessage(config.getId(), NodeMessage.Type.PRE_PREPARE, messageArgs);
+            prePrepareMessage.setClientId(clientId);
+            prePrepareMessage.setValueSignature(inputValueSignature);
 
             LOGGER.log(Level.INFO, MessageFormat.format(
                     "{0} - Node is leader, sending PRE-PREPARE messages", config.getId()));
@@ -147,13 +160,27 @@ public class NodeService implements UDPService {
         String value = message.getArgs().get(2);
         String senderId = message.getSenderId();
 
-        receivedPrePrepare.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
+        String clientId = message.getClientId();
+        String clientValueSignature = message.getValueSignature();
 
         // BYZANTINE_TESTS
-        if (this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.NONE && !messageFromLeader(senderId)) {
+        if (this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.NONE
+                && !messageFromLeader(senderId)) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
                             "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4} but node is not leader, ignoring",
+                            config.getId(), senderId, consensusInstance, round, value));
+            return Optional.empty();
+        }
+
+        Optional<ProcessConfig> clientConfig = Arrays.stream(this.clientsConfig)
+                .filter(client -> client.getId().equals(clientId)).findFirst();
+
+        if (clientConfig.isEmpty() || !RSAEncryption.verifySignature(value, clientValueSignature,
+                clientConfig.get().getPublicKeyPath())) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4} but signature is not valid, ignoring",
                             config.getId(), message.getSenderId(), consensusInstance, round, value));
             return Optional.empty();
         }
@@ -165,6 +192,8 @@ public class NodeService implements UDPService {
                             config.getId(), message.getSenderId(), consensusInstance, round, value));
             return Optional.empty();
         }
+
+        receivedPrePrepare.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
 
         // Within an instance of the algorithm, each upon rule is triggered at most once
         // for any round r
@@ -182,6 +211,8 @@ public class NodeService implements UDPService {
                         config.getId(), message.getSenderId(), consensusInstance, round, value));
 
         NodeMessage prepareMessage = new NodeMessage(config.getId(), NodeMessage.Type.PREPARE, message.getArgs());
+        prepareMessage.setClientId(clientId);
+        prepareMessage.setValueSignature(clientValueSignature);
 
         // Cancel previous timer and start new one (needed for round change)
 
@@ -198,13 +229,26 @@ public class NodeService implements UDPService {
         int consensusInstance = Integer.parseInt(message.getArgs().get(0));
         int round = Integer.parseInt(message.getArgs().get(1));
         String value = message.getArgs().get(2);
+        String clientValueSignature = message.getValueSignature();
+        String clientId = message.getClientId();
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}, Value {4}",
                         config.getId(), message.getSenderId(), consensusInstance, round, value));
 
-        prepareMessages.addMessage(consensusInstance, round, value);
+        Optional<ProcessConfig> clientConfig = Arrays.stream(this.clientsConfig)
+                .filter(client -> client.getId().equals(clientId)).findFirst();
+        if (clientConfig.isEmpty() || !RSAEncryption.verifySignature(value, clientValueSignature,
+                clientConfig.get().getPublicKeyPath())) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "{0} - Received PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4} but signature is not valid, ignoring",
+                            config.getId(), message.getSenderId(), consensusInstance, round, value));
+            return Optional.empty();
+        }
+
+        prepareMessages.addMessage(message);
 
         InstanceInfo instance = this.instanceInfo.get(consensusInstance);
 
@@ -222,6 +266,8 @@ public class NodeService implements UDPService {
         Optional<String> preparedValue = prepareMessages.hasValidQuorum(config.getId(), consensusInstance, round);
         if (preparedValue.isPresent() && (instance == null || instance.getPreparedRound() < round)) {
 
+            prepareMessages.verifyReceivedMessages(preparedValue.get(), consensusInstance, round);
+
             // Set instance values
             this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(value));
             instance = this.instanceInfo.get(consensusInstance);
@@ -235,6 +281,8 @@ public class NodeService implements UDPService {
             messageArgs.add(instance.getPreparedValue());
 
             NodeMessage commitMessage = new NodeMessage(config.getId(), NodeMessage.Type.COMMIT, messageArgs);
+            commitMessage.setClientId(clientId);
+            commitMessage.setValueSignature(clientValueSignature);
 
             return Optional.of(commitMessage);
         }
@@ -252,13 +300,26 @@ public class NodeService implements UDPService {
         int consensusInstance = Integer.parseInt(message.getArgs().get(0));
         int round = Integer.parseInt(message.getArgs().get(1));
         String value = message.getArgs().get(2);
+        String clientValueSignature = message.getValueSignature();
+        String clientId = message.getClientId();
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received COMMIT message from {1}: Consensus Instance {2}, Round {3}, Value {4}",
                         config.getId(), message.getSenderId(), consensusInstance, round, value));
 
-        commitMessages.addMessage(consensusInstance, round, value);
+        Optional<ProcessConfig> clientConfig = Arrays.stream(this.clientsConfig)
+                .filter(client -> client.getId().equals(clientId)).findFirst();
+        if (clientConfig.isEmpty() || !RSAEncryption.verifySignature(value, clientValueSignature,
+                clientConfig.get().getPublicKeyPath())) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "{0} - Received COMMIT message from {1} Consensus Instance {2}, Round {3}, Value {4} but signature is not valid, ignoring",
+                            config.getId(), message.getSenderId(), consensusInstance, round, value));
+            return;
+        }
+
+        commitMessages.addMessage(message);
 
         InstanceInfo instance = this.instanceInfo.get(consensusInstance);
 
@@ -274,6 +335,8 @@ public class NodeService implements UDPService {
 
         Optional<String> committedValue = commitMessages.hasValidQuorum(config.getId(), consensusInstance, round);
         if (committedValue.isPresent() && (instance == null || instance.getCommittedRound() < round)) {
+
+            commitMessages.verifyReceivedMessages(committedValue.get(), consensusInstance, round);
 
             // this.timer.cancel(); // Not needed for now
 
@@ -434,7 +497,7 @@ public class NodeService implements UDPService {
                                         LOGGER.log(Level.INFO,
                                                 MessageFormat.format("{0} - Byzantine Fake Value", config.getId()));
                                         this.link.badBroadcast(nodeMessage.get());
-                                    }                                   
+                                    }
                                 }
                             }
 

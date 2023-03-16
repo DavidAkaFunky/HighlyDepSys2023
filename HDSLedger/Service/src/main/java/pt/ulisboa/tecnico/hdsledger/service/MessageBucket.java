@@ -9,6 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.text.MessageFormat;
 
+import pt.ulisboa.tecnico.hdsledger.communication.NodeMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 public class MessageBucket {
@@ -16,7 +17,7 @@ public class MessageBucket {
     private static final CustomLogger LOGGER = new CustomLogger(MessageBucket.class.getName());
 
     private final int quorumSize;
-    private final Map<Integer, Map<Integer, List<String>>> bucket = new ConcurrentHashMap<>();
+    private final Map<Integer, Map<Integer, List<NodeMessage>>> bucket = new ConcurrentHashMap<>();
 
     public MessageBucket(int nodeCount) {
         int f = Math.floorDiv(nodeCount - 1, 3);
@@ -28,14 +29,15 @@ public class MessageBucket {
      * 
      * @param consensusInstance
      * 
-     * @param round
-     * 
-     * @param value
+     * @param message
      */
-    public void addMessage(int consensusInstance, int round, String value) {
+    public void addMessage(NodeMessage message) {
+        int consensusInstance = Integer.parseInt(message.getArgs().get(0));
+        int round = Integer.parseInt(message.getArgs().get(1));
+
         bucket.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
         bucket.get(consensusInstance).putIfAbsent(round, new ArrayList<>());
-        bucket.get(consensusInstance).get(round).add(value);
+        bucket.get(consensusInstance).get(round).add(message);
     }
 
     /*
@@ -50,16 +52,10 @@ public class MessageBucket {
 
         // Create mapping of value to frequency
         HashMap<String, Integer> frequency = new HashMap<String, Integer>();
-        bucket.get(instance).get(round).forEach((String value) -> {
+        bucket.get(instance).get(round).forEach((message) -> {
+            String value = message.getArgs().get(message.getArgs().size()-1);
             frequency.put(value, frequency.getOrDefault(value, 0) + 1);
         });
-
-        int size = frequency.size();
-
-        if (size > 1)
-            LOGGER.log(Level.INFO, MessageFormat.format(
-                            "{0} - ALERT: There are {1} different messages, there might be an intrusion!!!!!!", 
-                            nodeId, size));
 
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
@@ -70,4 +66,26 @@ public class MessageBucket {
         }).findFirst();
     }
 
+    /*
+     * Verify if all received messages have the same value
+     * Report if they don't
+     * 
+     * @param value The quorum value
+     * 
+     * @param instance The consensus instance
+     * 
+     * @param round The round
+     */
+    public void verifyReceivedMessages(String value, int instance, int round) {
+        bucket.get(instance).get(round).forEach((message) -> {
+            if(!message.getArgs().get(message.getArgs().size() - 1).equals(value))
+                LOGGER.log(Level.INFO, MessageFormat.format(
+                      "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                    + "@      WARNING: DIFFERENT VALUES RECEIVED!      @\n"
+                    + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                    + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                    message.getSenderId()
+                ));
+        });
+    }
 }

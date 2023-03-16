@@ -107,8 +107,18 @@ public class Library {
 
         int currentRequestId = this.requestId.getAndIncrement();
 
+        // Sign client input
+        String signature;
+        try{
+            signature = RSAEncryption.sign(value, config.getPrivateKeyPath());
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToSignMessage);
+        }
+
         LedgerRequest request = new LedgerRequest(LedgerRequest.Type.REQUEST, this.config.getId(), currentRequestId,
                 value, this.blockchain.size());
+
+        request.setClientSignature(signature);
 
         this.link.broadcast(request);
 

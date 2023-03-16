@@ -193,7 +193,7 @@ public class PerfectLink {
      */
     public Message receive() throws IOException, ClassNotFoundException {
 
-        byte[] buf = new byte[1024];
+        byte[] buf = new byte[4096];
         DatagramPacket response = new DatagramPacket(buf, buf.length);
 
         socket.receive(response);

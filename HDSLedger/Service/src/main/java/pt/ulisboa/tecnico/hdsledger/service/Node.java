@@ -55,8 +55,8 @@ public class Node {
                     LedgerRequest.class);
 
             // Services that implement listen from UDPService
-            NodeService nodeService = new NodeService(nodeConfig, linkToNodes, leaderId, otherNodes.length);
-            LedgerService ledgerService = new LedgerService(id, nodeService, linkToClients);
+            NodeService nodeService = new NodeService(clients, nodeConfig, linkToNodes, leaderId, otherNodes.length);
+            LedgerService ledgerService = new LedgerService(clients, id, nodeService, linkToClients);
 
             nodeService.listen();
             ledgerService.listen();

@@ -3,6 +3,8 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 public class LedgerRequest extends Message {
 
     private String arg;
+    private String clientSignature; 
+    // Client id
     private int requestId;
     private int blockchainSize;
 
@@ -19,6 +21,14 @@ public class LedgerRequest extends Message {
 
     public void setArg(String arg) {
         this.arg = arg;
+    }
+
+    public String getClientSignature() {
+        return clientSignature;
+    }   
+
+    public void setClientSignature(String clientSignature) {
+        this.clientSignature = clientSignature;
     }
 
     public int getRequestId(){
