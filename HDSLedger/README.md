@@ -95,7 +95,8 @@ The script has arguments which can be modified:
 - `debug` - if set to "True" the client process will print logs about the
   perfect link and library operations
 - `server_config` - a string from the array `server_configs` which contains the possible configurations for the blockchain nodes
-  Run the script with the following command:
+
+Run the script with the following command:
 
 ```bash
 python3 puppet-master.py
