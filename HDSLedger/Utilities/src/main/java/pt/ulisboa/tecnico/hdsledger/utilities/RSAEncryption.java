@@ -22,7 +22,7 @@ import javax.crypto.NoSuchPaddingException;
 public class RSAEncryption {
 
     private static byte[] readFile(String path) throws FileNotFoundException, IOException {
-  
+
         FileInputStream fis = new FileInputStream(path);
         byte[] content = new byte[fis.available()];
         fis.read(content);

@@ -139,7 +139,7 @@ public class PerfectLink {
                     if (receivedAcks.contains(messageId))
                         break;
                 }
-                // link.updateAck(messageId);
+
                 LOGGER.log(Level.INFO, MessageFormat.format("{0} - NodeMessage {1} sent to {2}:{3} successfully",
                         config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
@@ -205,13 +205,18 @@ public class PerfectLink {
         // Verify signature (byzantine nodes will avoid it to cooperate with each other)
         // BYZANTINE_TESTS
         // Any byzantine node will not verify signatures
-        if (config.getByzantineBehavior() == ByzantineBehavior.NONE && !RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
-                nodes.get(message.getSenderId()).getPublicKeyPath())) {
+        if (config.getByzantineBehavior() == ByzantineBehavior.NONE
+                && !RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
+                        nodes.get(message.getSenderId()).getPublicKeyPath())) {
             message.setType(NodeMessage.Type.IGNORE);
-       
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - NodeMessage {1} from {2}:{3} was incorrectly signed, ignoring",
-                            config.getId(), response.getAddress(), response.getPort()));
+
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                  + "@      WARNING: INVALID MESSAGE SIGNATURE!      @\n"
+                  + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                  + "IT IS POSSIBLE THAT NODE {0}:{1} IS DOING SOMETHING NASTY!",
+                  InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
+
             return message;
         }
 
@@ -221,8 +226,7 @@ public class PerfectLink {
         if (!nodes.containsKey(senderId))
             throw new LedgerException(ErrorMessage.NoSuchNode);
 
-        // Handle ACKS, since it's possible to receive multiple acks from the same
-        // message
+        // Handle ACKS, since it's possible to receive multiple acks from the same message
         if (message.getType().equals(NodeMessage.Type.ACK)) {
             receivedAcks.add(messageId);
             return message;

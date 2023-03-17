@@ -16,7 +16,7 @@ public class CustomLogger {
         ConsoleHandler handler = new ConsoleHandler();
 
         Formatter formatter = new CustomLog();
-        handler.setFormatter(formatter);        
+        handler.setFormatter(formatter);
 
         LOGGER.addHandler(handler);
     }
@@ -31,7 +31,6 @@ class CustomLog extends Formatter {
     @Override
     public String format(LogRecord record) {
         StringBuilder sb = new StringBuilder();
-        // sb.append(record.getLevel()).append(':'); // Uncomment once we have ERROR messages
         sb.append(record.getMessage()).append('\n');
         return sb.toString();
     }

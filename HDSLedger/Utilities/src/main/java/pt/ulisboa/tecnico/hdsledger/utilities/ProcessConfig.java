@@ -7,7 +7,7 @@ public class ProcessConfig {
     private String hostname;
 
     private String id;
-    
+
     private int port;
 
     private int clientPort;
@@ -19,10 +19,10 @@ public class ProcessConfig {
     private ByzantineBehavior byzantineBehavior = ByzantineBehavior.NONE;
 
     public enum ByzantineBehavior {
-        NONE("NONE"), 
+        NONE("NONE"),
         PASSIVE("PASSIVE"),
-        DROP("DROP"), 
-        FAKE_LEADER("FAKE_LEADER"), 
+        DROP("DROP"),
+        FAKE_LEADER("FAKE_LEADER"),
         FAKE_VALUE("FAKE_VALUE"),
         BAD_BROADCAST("BAD_BROADCAST"),
         BAD_CONSENSUS("BAD_CONSENSUS");
@@ -81,7 +81,7 @@ public class ProcessConfig {
     public String getPrivateKeyPath() {
         return privateKeyPath;
     }
-    
+
     public void setByzantineBehavior(ByzantineBehavior byzantineBehavior) {
         this.byzantineBehavior = byzantineBehavior;
     }

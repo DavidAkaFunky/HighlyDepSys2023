@@ -17,17 +17,17 @@ import java.util.logging.Level;
 public class Node {
 
     private static final CustomLogger LOGGER = new CustomLogger(Node.class.getName());
-    private static String NODE_CONFIG = "src/main/resources/";
-    private static final String CLIENT_CONFIG = "../Client/src/main/resources/client_config.json";
+    private static final String clientsConfigPath = "../Client/src/main/resources/client_config.json";
+    private static String nodesConfigPath = "src/main/resources/";
 
     public static void main(String[] args) {
 
         try {
             // Single command line argument (id)
             String id = args[0];
-            NODE_CONFIG += args[1];
+            nodesConfigPath += args[1];
 
-            ProcessConfig[] otherNodes = new ProcessConfigBuilder().fromFile(NODE_CONFIG);
+            ProcessConfig[] otherNodes = new ProcessConfigBuilder().fromFile(nodesConfigPath);
             String leaderId = Arrays.stream(otherNodes).filter(ProcessConfig::isLeader).findAny().get().getId();
 
             Optional<ProcessConfig> node = Arrays.stream(otherNodes).filter(nodeConfig -> nodeConfig.getId().equals(id))
@@ -47,7 +47,7 @@ public class Node {
                     nodeConfig.getId(), nodeConfig.getHostname(), nodeConfig.getPort(),
                     nodeConfig.getByzantineBehavior(), nodeConfig.isLeader()));
 
-            ProcessConfig[] clients = new ProcessConfigBuilder().fromFile(CLIENT_CONFIG);
+            ProcessConfig[] clients = new ProcessConfigBuilder().fromFile(clientsConfigPath);
 
             // Abstraction to send and receive messages
             PerfectLink linkToNodes = new PerfectLink(nodeConfig, nodeConfig.getPort(), otherNodes, NodeMessage.class);

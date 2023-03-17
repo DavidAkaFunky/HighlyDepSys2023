@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
 public class InstanceInfo {
+
     private int currentRound = 1;
     private int preparedRound = -1;
     private String preparedValue;

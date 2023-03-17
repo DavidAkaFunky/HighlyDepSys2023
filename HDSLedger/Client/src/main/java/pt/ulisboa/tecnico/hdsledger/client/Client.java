@@ -13,7 +13,7 @@ import java.util.Scanner;
 
 public class Client {
 
-    private final static String clientsConfigPath = "../Client/src/main/resources/client_config.json";
+    private final static String clientsConfigPath = "src/main/resources/client_config.json";
     private static String nodesConfigPath = "../Service/src/main/resources/";
 
     private static void welcomeText(String clientId) {
@@ -30,21 +30,22 @@ public class Client {
         final String clientId = args[0];
         nodesConfigPath += args[1];
         boolean showDebugLogs = false;
-        if(args.length == 3){
+        if (args.length == 3) {
             showDebugLogs = args[2].equals("-debug");
         }
 
-        // Get all the client config
+        // Get all the configs
         ProcessConfig[] clientConfigs = new ProcessConfigBuilder().fromFile(clientsConfigPath);
         ProcessConfig[] nodeConfigs = new ProcessConfigBuilder().fromFile(nodesConfigPath);
-        
+
         // Get the client config
-        Optional<ProcessConfig> clientConfig = Arrays.stream(clientConfigs).filter(c -> c.getId().equals(clientId)).findFirst();
-        if (clientConfig.isEmpty()){
+        Optional<ProcessConfig> clientConfig = Arrays.stream(clientConfigs).filter(c -> c.getId().equals(clientId))
+                .findFirst();
+        if (clientConfig.isEmpty()) {
             throw new LedgerException(ErrorMessage.ConfigFileFormat);
         }
         ProcessConfig config = clientConfig.get();
-        
+
         // Allow the client to connect to the server's correct port
         for (ProcessConfig nodeConfig : nodeConfigs) {
             nodeConfig.setPort(nodeConfig.getClientPort());
@@ -56,7 +57,7 @@ public class Client {
 
         // Initial text
         welcomeText(clientId);
-        
+
         final Scanner scanner = new Scanner(System.in);
 
         String line = "";
@@ -68,7 +69,7 @@ public class Client {
                 continue;
             }
 
-            // TODO: What if string to be happended has spaces?
+            // Assuming string with no spaces
             String[] tokens = line.split(" ");
 
             switch (tokens[0]) {

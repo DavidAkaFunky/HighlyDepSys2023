@@ -4,8 +4,11 @@ import java.util.List;
 
 public class LedgerResponse extends Message {
     
+    // Consensus instance when value was decided
     private int consensusInstance;
+    // Message Identifier
     private int requestId;
+    // New blockchain values
     private List<String> values;
 
     public LedgerResponse(String senderId, int requestId, int consensusInstance, List<String> values) {

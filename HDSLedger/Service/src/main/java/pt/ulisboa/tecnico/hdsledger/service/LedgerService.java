@@ -21,14 +21,18 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
 public class LedgerService implements UDPService {
 
-    private final ProcessConfig[] clientConfigs;
-
-    private final String nodeId;
-    private final NodeService service;
-    private final PerfectLink link;
-
-    private final Map<String, Set<Integer>> clientRequests = new ConcurrentHashMap<>();
     private static final CustomLogger LOGGER = new CustomLogger(LedgerService.class.getName());
+    // Clients configurations
+    private final ProcessConfig[] clientConfigs;
+    // Node identifier
+    private final String nodeId;
+    // Node service
+    private final NodeService service;
+    // Link to communicate with blockchain nodes
+    private final PerfectLink link;
+    // Map of requests from clients
+    private final Map<String, Set<Integer>> clientRequests = new ConcurrentHashMap<>();
+    // Thread to run service
     private Thread thread;
 
     public LedgerService(ProcessConfig[] clientConfigs, String nodeId, NodeService service, PerfectLink link) {
@@ -51,7 +55,7 @@ public class LedgerService implements UDPService {
         String clientId = request.getSenderId();
         int messageId = request.getMessageId();
         int requestId = request.getRequestId();
-        int clientKnownBlockchainSize = request.getBlockchainSize();
+        int clientKnownBlockchainSize = request.getKnownBlockchainSize();
 
         // Check if client has already sent this request
         clientRequests.putIfAbsent(clientId, ConcurrentHashMap.newKeySet());
@@ -94,7 +98,7 @@ public class LedgerService implements UDPService {
                 .filter(c -> c.getId().equals(request.getSenderId())).findFirst();
         if (clientConfig.isEmpty())
             throw new LedgerException(ErrorMessage.NoSuchClient);
-        return RSAEncryption.verifySignature(request.getArg(), request.getClientSignature(),
+        return RSAEncryption.verifySignature(request.getValue(), request.getClientSignature(),
                 clientConfig.get().getPublicKeyPath());
     }
 
@@ -121,14 +125,18 @@ public class LedgerService implements UDPService {
                                     LedgerRequest request = (LedgerRequest) message;
 
                                     if (!verifyClientSignature(request)) {
-                                        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Invalid signature from {1}",
-                                                nodeId, message.getSenderId()));
+                                        LOGGER.log(Level.INFO, MessageFormat.format(
+                                                "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                              + "@       WARNING: INVALID CLIENT SIGNATURE!      @\n"
+                                              + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                              + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                                                message.getSenderId()));
                                         return;
                                     }
 
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received {1} message from {2}",
-                                                    nodeId, request.getArg().equals("") ? "READ" : "APPEND",
+                                                    nodeId, request.getValue().equals("") ? "READ" : "APPEND",
                                                     message.getSenderId()));
                                     response = requestConsensus(request);
                                 }

@@ -4,8 +4,9 @@ import java.io.Serializable;
 
 public class SignedMessage implements Serializable {
 
+    // Message content
     private String message;
-
+    // Message signature
     private String signature;
 
     public SignedMessage(String message, String signature) {

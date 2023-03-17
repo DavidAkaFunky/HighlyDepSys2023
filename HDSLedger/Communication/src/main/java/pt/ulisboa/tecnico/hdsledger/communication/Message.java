@@ -3,9 +3,12 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 import java.io.Serializable;
 
 public class Message implements Serializable {
-    
+
+    // Sender identifier
     private String senderId;
+    // Message identifier
     private int messageId;
+    // Message type
     private Type type;
 
     public enum Type {
@@ -45,5 +48,4 @@ public class Message implements Serializable {
     public void setType(Type type) {
         this.type = type;
     }
-
 }

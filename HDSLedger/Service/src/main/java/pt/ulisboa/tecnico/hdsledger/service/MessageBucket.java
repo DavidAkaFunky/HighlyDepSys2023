@@ -15,8 +15,9 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 public class MessageBucket {
 
     private static final CustomLogger LOGGER = new CustomLogger(MessageBucket.class.getName());
-
+    // Quorum size
     private final int quorumSize;
+    // Map of consensus instance to round to messages
     private final Map<Integer, Map<Integer, List<NodeMessage>>> bucket = new ConcurrentHashMap<>();
 
     public MessageBucket(int nodeCount) {
@@ -53,7 +54,7 @@ public class MessageBucket {
         // Create mapping of value to frequency
         HashMap<String, Integer> frequency = new HashMap<String, Integer>();
         bucket.get(instance).get(round).forEach((message) -> {
-            String value = message.getArgs().get(message.getArgs().size()-1);
+            String value = message.getArgs().get(message.getArgs().size() - 1);
             frequency.put(value, frequency.getOrDefault(value, 0) + 1);
         });
 
@@ -78,14 +79,13 @@ public class MessageBucket {
      */
     public void verifyReceivedMessages(String value, int instance, int round) {
         bucket.get(instance).get(round).forEach((message) -> {
-            if(!message.getArgs().get(message.getArgs().size() - 1).equals(value))
+            if (!message.getArgs().get(message.getArgs().size() - 1).equals(value))
                 LOGGER.log(Level.INFO, MessageFormat.format(
-                      "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                    + "@      WARNING: DIFFERENT VALUES RECEIVED!      @\n"
-                    + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                    + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
-                    message.getSenderId()
-                ));
+                        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "@      WARNING: DIFFERENT VALUES RECEIVED!      @\n"
+                                + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                        message.getSenderId()));
         });
     }
 }

@@ -94,8 +94,6 @@ public class NodeService implements UDPService {
                 .collect(Collectors.toList());
     }
 
-    // BIG TODO: What needs to be synchronized?
-
     /*
      * Start an instance of consensus for value inputValue
      * Only the current leader will start a consensus instance
@@ -105,7 +103,7 @@ public class NodeService implements UDPService {
      */
     public int startConsensus(LedgerRequest request) {
 
-        String inputValue = request.getArg();
+        String inputValue = request.getValue();
         String inputValueSignature = request.getClientSignature();
         String clientId = request.getSenderId();
 
@@ -166,10 +164,12 @@ public class NodeService implements UDPService {
         // BYZANTINE_TESTS
         if (this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.NONE
                 && !messageFromLeader(senderId)) {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                            "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4} but node is not leader, ignoring",
-                            config.getId(), senderId, consensusInstance, round, value));
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "@    WARNING: PRE-PREPARE FROM NON LEADER!      @\n"
+                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                    senderId));
             return Optional.empty();
         }
 
@@ -178,10 +178,12 @@ public class NodeService implements UDPService {
 
         if (clientConfig.isEmpty() || !RSAEncryption.verifySignature(value, clientValueSignature,
                 clientConfig.get().getPublicKeyPath())) {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                            "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4} but signature is not valid, ignoring",
-                            config.getId(), message.getSenderId(), consensusInstance, round, value));
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "@       WARNING: INVALID CLIENT SIGNATURE!      @\n"
+                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                    senderId));
             return Optional.empty();
         }
 
@@ -241,10 +243,12 @@ public class NodeService implements UDPService {
                 .filter(client -> client.getId().equals(clientId)).findFirst();
         if (clientConfig.isEmpty() || !RSAEncryption.verifySignature(value, clientValueSignature,
                 clientConfig.get().getPublicKeyPath())) {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                            "{0} - Received PREPARE message from {1} Consensus Instance {2}, Round {3}, Value {4} but signature is not valid, ignoring",
-                            config.getId(), message.getSenderId(), consensusInstance, round, value));
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "@       WARNING: INVALID CLIENT SIGNATURE!      @\n"
+                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                    message.getSenderId()));
             return Optional.empty();
         }
 
@@ -312,10 +316,12 @@ public class NodeService implements UDPService {
                 .filter(client -> client.getId().equals(clientId)).findFirst();
         if (clientConfig.isEmpty() || !RSAEncryption.verifySignature(value, clientValueSignature,
                 clientConfig.get().getPublicKeyPath())) {
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format(
-                            "{0} - Received COMMIT message from {1} Consensus Instance {2}, Round {3}, Value {4} but signature is not valid, ignoring",
-                            config.getId(), message.getSenderId(), consensusInstance, round, value));
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "@       WARNING: INVALID CLIENT SIGNATURE!      @\n"
+                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                    message.getSenderId()));
             return;
         }
 
@@ -323,8 +329,7 @@ public class NodeService implements UDPService {
 
         InstanceInfo instance = this.instanceInfo.get(consensusInstance);
 
-        // Within an instance of the algorithm, each upon rule is triggered at most once
-        // for any round r
+        // Within an instance of the algorithm, each upon rule is triggered at most once for any round r
         if (instance.getCommittedRound() >= round) {
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
@@ -381,8 +386,7 @@ public class NodeService implements UDPService {
     }
 
     private boolean justifyPrePrepare(int consensusInstance, int round, String value) {
-        // Round change is not implemented, therefore pre prepare should always be from
-        // round 1
+        // Round change is not implemented, therefore pre prepare should always be from round 1
         return round == 1;
     }
 

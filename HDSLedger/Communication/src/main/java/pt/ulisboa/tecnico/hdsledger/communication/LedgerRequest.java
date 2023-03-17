@@ -2,48 +2,51 @@ package pt.ulisboa.tecnico.hdsledger.communication;
 
 public class LedgerRequest extends Message {
 
-    private String arg;
-    private String clientSignature; 
-    // Client id
+    // Message identifier
     private int requestId;
-    private int blockchainSize;
+    // Stored blockchain size
+    private int knownBlockchainSize;
+    // Value to append to the blockchain
+    private String value;
+    // Signature of value with client's private key
+    private String clientSignature;
 
-    public LedgerRequest(Type type, String senderId, int requestId, String arg, int blockchainSize) {
+    public LedgerRequest(Type type, String senderId, int requestId, String value, int knownBlockchainSize) {
         super(senderId, type);
-        this.arg = arg;
+        this.value = value;
         this.requestId = requestId;
-        this.blockchainSize = blockchainSize;
+        this.knownBlockchainSize = knownBlockchainSize;
     }
 
-    public String getArg() {
-        return arg;
+    public String getValue() {
+        return value;
     }
 
-    public void setArg(String arg) {
-        this.arg = arg;
+    public void setValue(String value) {
+        this.value = value;
     }
 
     public String getClientSignature() {
         return clientSignature;
-    }   
+    }
 
     public void setClientSignature(String clientSignature) {
         this.clientSignature = clientSignature;
     }
 
-    public int getRequestId(){
+    public int getRequestId() {
         return requestId;
     }
 
-    public void setRequestId(int requestId){
+    public void setRequestId(int requestId) {
         this.requestId = requestId;
     }
 
-    public int getBlockchainSize() {
-        return blockchainSize;
+    public int getKnownBlockchainSize() {
+        return knownBlockchainSize;
     }
 
-    public void setBlockchainSize(int blockchainSize) {
-        this.blockchainSize = blockchainSize;
+    public void setKnownBlockchainSize(int knownBlockchainSize) {
+        this.knownBlockchainSize = knownBlockchainSize;
     }
 }

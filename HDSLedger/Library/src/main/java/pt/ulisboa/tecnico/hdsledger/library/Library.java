@@ -138,7 +138,6 @@ public class Library {
 
         responses.remove(currentRequestId);
         return blockchainValues;
-
     }
 
     public void listen() {
