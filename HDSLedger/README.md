@@ -35,15 +35,11 @@ The puppet master is a python script `puppet-master.py` which is responsible for
 and clients of the blockchain.
 The script assumes that `kitty` terminal emulator is installed and configuration files are correct.
 To run the script you need to have python3 installed.
-```
-python3 puppet-master.py
-```
 The script has two arguments which can be modified:
 - `terminal` - the terminal emulator used by the script
 - `debug` - if set to "True" the client process will print logs about the
 perfect link and library operations
-- `server_config` - a string from the array `server_configs` which contains
-the possible configurations for the blockchain nodes
+- `server_config` - a string from the array `server_configs` which contains the possible configurations for the blockchain nodes
 
 ## Maven
 
@@ -71,11 +67,16 @@ cd <module>/
 mvn compile exec:java
 ```
 
-or with arguments
+Run with arguments
 
 ```
 cd <module>/
 mvn compile exec:java -Dexec.args="..."
+```
+
+Or run the puppet master for a full environment recreation
+```
+python3 puppet-master.py
 ```
 
 ## Built With
