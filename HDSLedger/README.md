@@ -33,12 +33,13 @@ java RSAKeyGenerator w ./<IDENTIFIER>.priv ./<IDENTIFIER>.pub
 
 The puppet master is a python script `puppet-master.py` which is responsible for starting the nodes
 and clients of the blockchain.
-The script assume that `kitty` terminal emulator is installed and configuration files are correct.
+The script assumes that `kitty` terminal emulator is installed and configuration files are correct.
 To run the script you need to have python3 installed.
 ```
 python3 puppet-master.py
 ```
 The script has two arguments which can be modified:
+- `terminal` - the terminal emulator used by the script
 - `debug` - if set to "True" the client process will print logs about the
 perfect link and library operations
 - `server_config` - a string from the array `server_configs` which contains
@@ -49,6 +50,11 @@ the possible configurations for the blockchain nodes
 It's also possible to run the project manually by using Maven.
 
 ### Instalation
+
+Install Google's Gson library manually by running:
+```
+./install_deps.sh
+```
 
 Compile and install all modules using:
 
