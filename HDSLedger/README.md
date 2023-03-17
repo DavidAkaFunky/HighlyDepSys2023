@@ -7,6 +7,14 @@ guarantees. It uses the Istanbul BFT consensus algorithm to ensure that all node
 in the same order, achieving State Machine Replication (SMR) and guarantees that all nodes
 have the same state.
 
+## Requirements
+
+- [Java 17](https://www.oracle.com/java/technologies/javase-jdk17-downloads.html) - Programming language;
+
+- [Maven 3.8](https://maven.apache.org/) - Build and dependency management tool;
+
+- [Python 3](https://www.python.org/downloads/) - Programming language;
+
 ## Public Key Infrastructure
 
 Both the nodes and the clients of the blockchain should use self-generated public/private keys which are
@@ -21,7 +29,7 @@ cd PKI/
 javac *.java
 ```
 
-### Generating keys
+### Generate keys
 
 ```
 java RSAKeyGenerator w ./<IDENTIFIER>.priv ./<IDENTIFIER>.pub
@@ -29,28 +37,75 @@ java RSAKeyGenerator w ./<IDENTIFIER>.priv ./<IDENTIFIER>.pub
 
 ## Configuration Files
 
+### Client configuration
+
+Can be found inside the `resources/` folder of the `Client` module.
+
+```json
+{
+    "id": <CLIENT_ID>,
+    "hostname": "localhost",
+    "port": <CLIENT_PORT>,
+    "publicKeyPath": "../PKI/client<CLIENT_ID>.pub",
+    "privateKeyPath": "../PKI/client<CLIENT_ID>.priv",
+}
+```
+
+### Node configuration
+
+Can be found inside the `resources/` folder of the `Service` module.
+
+```json
+{
+    "id": <NODE_ID>,
+    "isLeader": <IS_LEADER>,
+    "hostname": "localhost",
+    "port": <NODE_PORT>,
+    "clientPort": <CLIENT_PORT>,
+    "publicKeyPath": "../PKI/node<CLIENT_ID>.pub",
+    "privateKeyPath": "../PKI/node<CLIENT_ID>.priv",
+    "byzantineBehavior": <BYZANTINE_BEHAVIOR>,
+}
+```
+
+Note: clientPort is the port where the client will connect to the node.
+
+## Dependencies
+
+To install the necessary dependencies run the following command:
+
+```bash
+./install_deps.sh
+```
+
+This should install the following dependencies:
+
+- [Google's Gson](https://github.com/google/gson) - A Java library that can be used to convert Java Objects into their JSON representation.
+
 ## Puppet Master
 
 The puppet master is a python script `puppet-master.py` which is responsible for starting the nodes
 and clients of the blockchain.
-The script assumes that `kitty` terminal emulator is installed and configuration files are correct.
-To run the script you need to have python3 installed.
-The script has two arguments which can be modified:
+The script runs with `kitty` terminal emulator by default since it's installed on the RNL labs.
+
+To run the script you need to have `python3` installed.
+The script has arguments which can be modified:
+
 - `terminal` - the terminal emulator used by the script
 - `debug` - if set to "True" the client process will print logs about the
-perfect link and library operations
+  perfect link and library operations
 - `server_config` - a string from the array `server_configs` which contains the possible configurations for the blockchain nodes
+  Run the script with the following command:
+
+```bash
+python3 puppet-master.py
+```
 
 ## Maven
 
 It's also possible to run the project manually by using Maven.
 
 ### Instalation
-
-Install Google's Gson library manually by running:
-```
-./install_deps.sh
-```
 
 Compile and install all modules using:
 
@@ -73,12 +128,3 @@ Run with arguments
 cd <module>/
 mvn compile exec:java -Dexec.args="..."
 ```
-
-Or run the puppet master for a full environment recreation
-```
-python3 puppet-master.py
-```
-
-## Built With
-
-- [Maven](https://maven.apache.org/) - Build and dependency management tool;
