@@ -5,6 +5,9 @@ import sys
 # Debug flag for client process
 debug = True
 
+# Terminal Emulator used to spawn the processes
+terminal = "kitty"
+
 # Blockchain node configuration file name
 server_configs = [
     "regular_config.json",
@@ -27,7 +30,7 @@ with open("Service/src/main/resources/" + server_config) as f:
         pid = os.fork()
         if pid == 0:
             os.system(
-                f"/usr/bin/kitty sh -c \"cd Service; mvn exec:java -Dexec.args='{key['id']} {server_config}' ; sleep 1000\"")
+                f"{terminal} sh -c \"cd Service; mvn exec:java -Dexec.args='{key['id']} {server_config}' ; sleep 1000\"")
             sys.exit()
 
 # Spawn blockchain clients
@@ -39,5 +42,5 @@ with open("Client/src/main/resources/client_config.json") as f:
         if pid == 0:
             debug_str = "-debug" if debug else ""
             os.system(
-                f"/usr/bin/kitty sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {server_config} {debug_str}' ; sleep 1000\"")
+                f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {server_config} {debug_str}' ; sleep 1000\"")
             sys.exit()
