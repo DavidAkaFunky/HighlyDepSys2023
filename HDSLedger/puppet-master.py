@@ -17,7 +17,7 @@ server_configs = [
     "bad_broadcast_config.json",
     "bad_consensus_config.json",
 ]
-server_config = server_configs[1]
+server_config = server_configs[0]
 
 # Compile classes
 os.system("mvn clean install")
