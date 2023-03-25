@@ -1,6 +1,8 @@
-package pt.ulisboa.tecnico.hdsledger.service;
+package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
+import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
+import pt.ulisboa.tecnico.hdsledger.service.models.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.NodeMessage;
@@ -48,10 +50,6 @@ public class NodeService implements UDPService {
 
     // Consensus instance -> Round -> List of commit messages
     private final MessageBucket commitMessages;
-
-    // Not needed yet
-    // private Timer timer = new Timer();
-    // private static final int TIMER_PERIOD = 10000;
 
     public NodeService(ProcessConfig[] clientsConfig, ProcessConfig config, PerfectLink link, String leaderId,
             int nodesLength) {
@@ -140,8 +138,6 @@ public class NodeService implements UDPService {
                     "{0} - Node is not leader, waiting for PRE-PREPARE message", config.getId()));
         }
 
-        // Start timer (needed for round change)
-
         return localConsensusInstance;
     }
 
@@ -215,8 +211,6 @@ public class NodeService implements UDPService {
         NodeMessage prepareMessage = new NodeMessage(config.getId(), NodeMessage.Type.PREPARE, message.getArgs());
         prepareMessage.setClientId(clientId);
         prepareMessage.setValueSignature(clientValueSignature);
-
-        // Cancel previous timer and start new one (needed for round change)
 
         return Optional.of(prepareMessage);
     }
@@ -343,8 +337,6 @@ public class NodeService implements UDPService {
 
             commitMessages.verifyReceivedMessages(committedValue.get(), consensusInstance, round);
 
-            // this.timer.cancel(); // Not needed for now
-
             // Add block to blockchain
             while (blockchain.size() < consensusInstance - 1) {
                 try {
@@ -367,18 +359,6 @@ public class NodeService implements UDPService {
                             "{0} - Decided on Consensus Instance {1}, Round {2}, Value {3}",
                             config.getId(), consensusInstance, round, value));
         }
-    }
-
-    void uponRoundChange(NodeMessage message) {
-        int consensusInstance = Integer.parseInt(message.getArgs().get(0));
-        int round = Integer.parseInt(message.getArgs().get(1));
-
-        LOGGER.log(Level.INFO,
-                MessageFormat.format(
-                        "{0} - Received ROUND-CHANGE message from {1}: Consensus Instance {2}, New Round {3}",
-                        config.getId(), message.getSenderId(), consensusInstance, round));
-
-        // NOT IMPLEMENTED
     }
 
     private boolean messageFromLeader(String senderId) {
@@ -419,10 +399,6 @@ public class NodeService implements UDPService {
 
                                 case COMMIT -> {
                                     uponCommit((NodeMessage) message);
-                                }
-
-                                case ROUND_CHANGE -> {
-                                    uponRoundChange((NodeMessage) message);
                                 }
 
                                 case ACK -> {

@@ -15,7 +15,7 @@ public class Message implements Serializable {
         // For Ledger Requests
         REQUEST,
         // For Node Messages
-        PRE_PREPARE, PREPARE, COMMIT, ROUND_CHANGE, DECIDE, ACK, IGNORE,
+        PRE_PREPARE, PREPARE, COMMIT, DECIDE, ACK, IGNORE,
         // For Ledger Responses
         REPLY;
     }

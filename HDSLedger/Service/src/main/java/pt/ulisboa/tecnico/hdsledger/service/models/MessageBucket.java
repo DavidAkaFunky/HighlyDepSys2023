@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.service;
+package pt.ulisboa.tecnico.hdsledger.service.models;
 
 import java.util.Map;
 import java.util.Optional;

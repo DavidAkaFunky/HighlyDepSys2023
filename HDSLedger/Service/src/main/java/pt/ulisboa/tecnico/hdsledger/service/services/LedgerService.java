@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.service;
+package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
