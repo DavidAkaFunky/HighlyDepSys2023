@@ -14,6 +14,8 @@ public class Transaction {
     private BigDecimal amount;
     // Payed fee
     private BigDecimal fee;
+    // Public key
+    private Account blockProducer;
     // Signature of the transaction (Non-Repudiation)
     private String signature;
 
