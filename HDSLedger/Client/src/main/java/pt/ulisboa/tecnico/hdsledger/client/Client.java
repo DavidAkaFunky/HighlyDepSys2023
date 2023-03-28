@@ -6,6 +6,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -19,8 +20,9 @@ public class Client {
     private static void welcomeText(String clientId) {
         System.out.println("Welcome to the HDS Ledger Client!");
         System.out.println("Your client ID is: " + clientId);
-        System.out.println("Type 'append <value>' to append a string to the blockchain.");
-        System.out.println("Type 'read' to read the blockchain.");
+        System.out.println("Type 'create <account_id>' to create an account.");
+        System.out.println("Type 'transfer <source_id> <destination_id> <amount>' to transfer a given amount from one account to another.");
+        System.out.println("Type 'read <account_id> <strong|weak>' to read the blockchain.");
         System.out.println("Type 'exit' to exit the program.");
     }
 
@@ -69,23 +71,38 @@ public class Client {
                 continue;
             }
 
-            // Assuming string with no spaces
             String[] tokens = line.split(" ");
 
             switch (tokens[0]) {
-                case "append" -> {
-                    if (tokens.length == 2) {
-                        System.out.println("Appending " + tokens[1] + " to blockchain...");
-                        List<String> blockchainValues = library.append(tokens[1]);
-                        library.printNewBlockchainValues(blockchainValues);
-                        library.printBlockchain();
-                    } else {
-                        System.err.println("Wrong number of arguments (1 required).");
+                case "create" -> {
+                    if (tokens.length != 2) {
+                        System.out.println("Invalid number of arguments for create command.");
+                        continue;
                     }
+                    String accountId = tokens[1];
+                    System.out.println("Creating account...");
+                    library.create(accountId);
+                }
+                case "transfer" -> {
+                    if (tokens.length != 4) {
+                        System.out.println("Invalid number of arguments for transfer command.");
+                        continue;
+                    }
+                    String sourceId = tokens[1];
+                    String destinationId = tokens[2];
+                    BigDecimal amount = new BigDecimal(tokens[3]);
+                    System.out.println("Transferring " + amount + " from " + sourceId + " to " + destinationId + "...");
+                    library.transfer(sourceId, destinationId, amount);
                 }
                 case "read" -> {
-                    System.out.println("Reading blockchain...");
-                    library.read();
+                    if (tokens.length != 3) {
+                        System.out.println("Invalid number of arguments for read command.");
+                        continue;
+                    }
+                    String accountId = tokens[1];
+                    String consistencyMode = tokens[2];
+                    System.out.println("Reading blockchain with " + consistencyMode + " mode...");
+                    library.read(accountId, consistencyMode);
                     library.printBlockchain();
                 }
                 case "exit" -> {

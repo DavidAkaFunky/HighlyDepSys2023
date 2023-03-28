@@ -7,6 +7,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.logging.Level;
@@ -140,6 +141,27 @@ public class Library {
         return blockchainValues;
     }
 
+    /*
+     * Creates a new account in the ledger
+     */
+    public void create(String accountId) {
+
+    }
+
+    /*
+     * Transfer money from one account to another
+     */
+    public void transfer(String sourceId, String destinationId, BigDecimal amount) {
+
+    }
+
+    /*
+     * Read account balance
+     */
+    public void read(String accountId, String consistencyMode) {
+
+    }
+    
     public void listen() {
         try {
             // Thread to listen on every request

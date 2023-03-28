@@ -33,6 +33,8 @@ public class NodeService implements UDPService {
     // Store strings
     private final Map<Integer, String> blockchain = new ConcurrentHashMap<>();
 
+    private final Map<Integer, Block> blocks = new ConcurrentHashMap<>();
+
     // Current node is leader
     private ProcessConfig config;
 

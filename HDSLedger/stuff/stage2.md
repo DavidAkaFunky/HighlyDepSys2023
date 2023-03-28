@@ -1,4 +1,36 @@
 
+
+
+Cliente
+- Criar conta:
+Envia PublicKey
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Token Exchange System (TES)
 
 
