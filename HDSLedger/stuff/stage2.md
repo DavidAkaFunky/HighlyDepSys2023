@@ -63,6 +63,15 @@ Servidor
     unverified_mempool (messages)
     verified_mempool (messages)
 
+    Quando um nó é réplica:2
+    1) committed_soft_state == uncommitted_soft_state
+    2) verified_mempool == {} (não verifica nenhuma transação)
+    3) Guardar timer (como implementar?) para anular transações
+    após N instâncias de consenso na unverified_mempool
+    4) Quando um bloco é recebido, as transações incluídas
+    são removidas da unverified_mempool e vão diretamente para o
+    committed e o uncommitted soft state
+
     mint() {
         new Thread() ->
         if(verified_mempool.size() >= block_size){

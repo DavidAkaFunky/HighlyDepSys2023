@@ -7,13 +7,13 @@ public class LedgerResponse extends Message {
     // Consensus instance when value was decided
     private int consensusInstance;
     // Message Identifier
-    private int requestId;
+    private int nonce;
     // New blockchain values
     private List<String> values;
 
-    public LedgerResponse(String senderId, int requestId, int consensusInstance, List<String> values) {
+    public LedgerResponse(String senderId, int nonce, int consensusInstance, List<String> values) {
         super(senderId, Type.REPLY);
-        this.requestId = requestId;
+        this.nonce = nonce;
         this.consensusInstance = consensusInstance;
         this.values = values;
     }
@@ -34,11 +34,11 @@ public class LedgerResponse extends Message {
         this.consensusInstance = consensusInstance;
     }
     
-    public int getRequestId(){
-        return requestId;
+    public int getNonce(){
+        return nonce;
     }
 
-    public void setRequestId(int requestId) {
-        this.requestId = requestId;
+    public void setNonce(int nonce) {
+        this.nonce = nonce;
     }
 }

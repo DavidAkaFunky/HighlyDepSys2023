@@ -1,6 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
@@ -50,11 +50,11 @@ public class LedgerService implements UDPService {
         thread.interrupt();
     }
 
-    public Optional<LedgerResponse> requestConsensus(LedgerRequest request) {
+    public Optional<LedgerResponse> requestConsensus(LedgerRequestTransfer request) {
 
         String clientId = request.getSenderId();
         int messageId = request.getMessageId();
-        int requestId = request.getRequestId();
+        int requestId = request.getNonce();
         int clientKnownBlockchainSize = request.getKnownBlockchainSize();
 
         // Check if client has already sent this request
@@ -93,7 +93,7 @@ public class LedgerService implements UDPService {
         return Optional.empty();
     }
 
-    private boolean verifyClientSignature(LedgerRequest request) {
+    private boolean verifyClientSignature(LedgerRequestTransfer request) {
         Optional<ProcessConfig> clientConfig = Arrays.stream(this.clientConfigs)
                 .filter(c -> c.getId().equals(request.getSenderId())).findFirst();
         if (clientConfig.isEmpty())
@@ -122,7 +122,7 @@ public class LedgerService implements UDPService {
                             switch (message.getType()) {
                                 case REQUEST -> {
 
-                                    LedgerRequest request = (LedgerRequest) message;
+                                    LedgerRequestTransfer request = (LedgerRequestTransfer) message;
 
                                     if (!verifyClientSignature(request)) {
                                         LOGGER.log(Level.INFO, MessageFormat.format(

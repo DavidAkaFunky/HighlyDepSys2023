@@ -1,6 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.library;
 
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
@@ -116,7 +116,7 @@ public class Library {
             throw new LedgerException(ErrorMessage.FailedToSignMessage);
         }
 
-        LedgerRequest request = new LedgerRequest(LedgerRequest.Type.REQUEST, this.config.getId(), currentRequestId,
+        LedgerRequestTransfer request = new LedgerRequestTransfer(LedgerRequest.Type.REQUEST, this.config.getId(), currentRequestId,
                 value, this.blockchain.size());
 
         request.setClientSignature(signature);
@@ -184,7 +184,7 @@ public class Library {
 
                                 // Add new values to the blockchain
                                 LedgerResponse response = (LedgerResponse) message;
-                                responses.put(response.getRequestId(), response);
+                                responses.put(response.getNonce(), response);
                             }
                             case ACK -> {
                                 LOGGER.log(Level.INFO,

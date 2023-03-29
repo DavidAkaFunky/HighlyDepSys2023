@@ -1,29 +1,33 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-public class LedgerRequest extends Message {
+import java.math.BigDecimal;
+
+public class LedgerRequestTransfer extends Message {
 
     // Message identifier
-    private int requestId;
+    private int nonce;
     // Stored blockchain size
     private int knownBlockchainSize;
-    // Value to append to the blockchain
-    private String value;
-    // Signature of value with client's private key
+    // Destination ID
+    private String destId;
+    // Amount to transfer
+    private BigDecimal amount;
+    // Signature of amount with client's private key
     private String clientSignature;
 
-    public LedgerRequest(Type type, String senderId, int requestId, String value, int knownBlockchainSize) {
+    public LedgerRequestTransfer(Type type, String senderId, int nonce, BigDecimal amount, int knownBlockchainSize) {
         super(senderId, type);
-        this.value = value;
-        this.requestId = requestId;
+        this.amount = amount;
+        this.nonce = nonce;
         this.knownBlockchainSize = knownBlockchainSize;
     }
 
-    public String getValue() {
-        return value;
+    public BigDecimal getAmount() {
+        return amount;
     }
 
-    public void setValue(String value) {
-        this.value = value;
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
     }
 
     public String getClientSignature() {
@@ -34,12 +38,12 @@ public class LedgerRequest extends Message {
         this.clientSignature = clientSignature;
     }
 
-    public int getRequestId() {
-        return requestId;
+    public int getNonce() {
+        return nonce;
     }
 
-    public void setRequestId(int requestId) {
-        this.requestId = requestId;
+    public void setNonce(int nonce) {
+        this.nonce = nonce;
     }
 
     public int getKnownBlockchainSize() {
