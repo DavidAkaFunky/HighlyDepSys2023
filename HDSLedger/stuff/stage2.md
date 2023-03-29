@@ -1,3 +1,27 @@
+DUVIDAS PARA LAB
+    - cliente bloqueia até receber confirmação de que foi appended à blockchain ?
+        ou até receber confirmação de que tem "autoridade" (enunciado) ?
+        ou nunca bloqueia ?
+
+    - quando responder ao cliente ? 
+        é quando tem a "autoridade" = quando?
+        caso seja rejeitado e caso seja aceite ? quando for aceite o bloco ou quando for validada ?
+
+    - apenas o lider valida as transacoes ou todos validam ? 
+        e se chegam operacoes com diferentes ordens ? pode gerar certas transacoes aceites nuns nós e outras nao
+
+        se só o líder validar, pode ser bizantino e
+        criar estados inconsistentes
+
+    - create account pode ser omitido (putIfAbsent) ? tem de ir para a blockchain ?
+
+    - temos de garantir fifo nas transacoes de um cliente (nonce) ? 
+
+    - strong read deve ser um consenso parcial?
+        
+
+    - soft read -> ao enviar mensagem de commit, para alem do bloco, enviar tambem uma assinatura do bloco
+        o nó que receber este commit tem de guardar a assinatura (por bloco) para mais tarde enviar ao cliente
 
 Client
     envia mensagens assinadas

@@ -1,6 +1,8 @@
 package pt.ulisboa.tecnico.hdsledger.library;
 
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestBalance;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestCreate;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
@@ -68,6 +70,38 @@ public class Library {
      */
     public void create(String accountId) {
 
+        int currentNonce = this.nonce.getAndIncrement();
+
+        // Get account public key
+        Optional<ProcessConfig> accountConfig = Arrays.stream(this.clientConfigs).filter(c -> c.getId().equals(accountId))
+                .findFirst();
+        if (accountConfig.isEmpty())
+            throw new LedgerException(ErrorMessage.InvalidAccount);
+
+        PublicKey accountPubKey;
+        try {
+            accountPubKey = RSAEncryption.readPublicKey(accountConfig.get().getPublicKeyPath());
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+        }
+
+        // Create request
+        LedgerRequestCreate requestCreate = new LedgerRequestCreate(currentNonce, accountPubKey);
+
+        String requestTransferSerialized = new Gson().toJson(requestCreate);
+
+        String signature;
+        try {
+            signature = RSAEncryption.sign(requestTransferSerialized, config.getPrivateKeyPath());
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToSignMessage);
+        }
+
+        // Send generic ledger request with signature
+        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.TRANSFER, requestTransferSerialized,
+                signature);
+
+        this.link.broadcast(request);
     }
 
     /*
@@ -75,6 +109,37 @@ public class Library {
      */
     public void read(String accountId, String consistencyMode) {
 
+        // Get account public key
+        Optional<ProcessConfig> accountConfig = Arrays.stream(this.clientConfigs).filter(c -> c.getId().equals(accountId))
+                .findFirst();
+        if (accountConfig.isEmpty())
+            throw new LedgerException(ErrorMessage.InvalidAccount);
+
+        PublicKey accountPubKey;
+        try {
+            accountPubKey = RSAEncryption.readPublicKey(accountConfig.get().getPublicKeyPath());
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+        }
+
+        // Create request
+        LedgerRequestBalance requestRead = new LedgerRequestBalance(accountPubKey, consistencyMode);
+
+        String requestTransferSerialized = new Gson().toJson(requestRead);
+
+        String signature;
+
+        try {
+            signature = RSAEncryption.sign(requestTransferSerialized, config.getPrivateKeyPath());
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToSignMessage);
+        }
+
+        // Send generic ledger request with signature
+        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.BALANCE, requestTransferSerialized,
+                signature);
+
+        this.link.broadcast(request);
     }
 
     /*
@@ -138,13 +203,7 @@ public class Library {
                                         MessageFormat.format("{0} - Received REPLY message from {1}",
                                                 config.getId(), message.getSenderId()));
 
-                                // Ignore replies from non-leader nodes
-                                if (!message.getSenderId().equals(leader.getId()))
-                                    continue;
-
-                                // Add new values to the blockchain
-                                LedgerResponse response = (LedgerResponse) message;
-                                responses.put(response.getNonce(), response);
+                                // TODO: Handle reply
                             }
                             case ACK -> {
                                 LOGGER.log(Level.INFO,

@@ -5,7 +5,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.NodeMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.service.services.LedgerService;
@@ -54,7 +54,7 @@ public class Node {
             // Abstraction to send and receive messages
             PerfectLink linkToNodes = new PerfectLink(nodeConfig, nodeConfig.getPort(), otherNodes, NodeMessage.class);
             PerfectLink linkToClients = new PerfectLink(nodeConfig, nodeConfig.getClientPort(), clients,
-                    LedgerRequestTransfer.class);
+                    LedgerRequest.class);
 
             // Services that implement listen from UDPService
             NodeService nodeService = new NodeService(clients, nodeConfig, linkToNodes, leaderId, otherNodes.length);

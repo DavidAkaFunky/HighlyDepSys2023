@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestCreate;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
@@ -31,7 +33,7 @@ public class LedgerService implements UDPService {
     // Link to communicate with blockchain nodes
     private final PerfectLink link;
     // Map of requests from clients
-    private final Map<String, Set<Integer>> clientRequests = new ConcurrentHashMap<>();
+    private final Map<String, Integer> clientRequests = new ConcurrentHashMap<>();
     // Thread to run service
     private Thread thread;
 
@@ -50,56 +52,42 @@ public class LedgerService implements UDPService {
         thread.interrupt();
     }
 
-    public Optional<LedgerResponse> requestConsensus(LedgerRequestTransfer request) {
+    private boolean verifyClientSignature(LedgerRequest request) {
 
-        String clientId = request.getSenderId();
-        int messageId = request.getMessageId();
-        int requestId = request.getNonce();
-        int clientKnownBlockchainSize = request.getKnownBlockchainSize();
-
-        // Check if client has already sent this request
-        clientRequests.putIfAbsent(clientId, ConcurrentHashMap.newKeySet());
-        boolean isNewMessage = clientRequests.get(clientId).add(messageId);
-
-        LOGGER.log(Level.INFO, "Request for consensus");
-
-        if (isNewMessage) {
-            LOGGER.log(Level.INFO, "Starting consensus");
-
-            // Start consensus instance
-            int consensusInstance = service.startConsensus(request);
-            Map<Integer, String> blockchain;
-            for (;;) {
-                // Wait for consensus to finish
-                blockchain = service.getBlockchain();
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                if (blockchain.size() >= consensusInstance)
-                    break;
-            }
-
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Consensus finished", nodeId));
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - New blockchain: {1}", nodeId, service.getBlockchainAsList()));
-
-            return Optional.of(new LedgerResponse(nodeId, requestId, consensusInstance,
-                    service.getBlockchainStartingAtInstance(clientKnownBlockchainSize)));
-        }
-
-        LOGGER.log(Level.INFO, "Already started consensus for this request, ignoring");
-        return Optional.empty();
-    }
-
-    private boolean verifyClientSignature(LedgerRequestTransfer request) {
+        // Find config of the sender
         Optional<ProcessConfig> clientConfig = Arrays.stream(this.clientConfigs)
                 .filter(c -> c.getId().equals(request.getSenderId())).findFirst();
         if (clientConfig.isEmpty())
             throw new LedgerException(ErrorMessage.NoSuchClient);
-        return RSAEncryption.verifySignature(request.getValue(), request.getClientSignature(),
-                clientConfig.get().getPublicKeyPath());
+
+        // Verify client action was signed by him
+        if (RSAEncryption.verifySignature(request.getMessage(), request.getClientSignature(),
+                clientConfig.get().getPublicKeyPath()))
+            return true;
+
+        LOGGER.log(Level.INFO, MessageFormat.format(
+                "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        + "@          WARNING: INVALID CLIENT SIGNATURE!        @\n"
+                        + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                request.getSenderId()));
+        return false;
+    }
+
+    public Optional<LedgerResponse> createAccount(LedgerRequest request) {
+        if (!verifyClientSignature(request))
+            return Optional.empty();
+        while (clientRequests.get(request.getSenderId()))
+            response = createAccount(request.deserializeCreate());
+    }
+
+    public Optional<LedgerResponse> transfer(LedgerRequest request) {
+        if (!verifyClientSignature(request))
+            return Optional.empty();
+
+        
+
+        return Optional.empty();
     }
 
     @Override
@@ -120,25 +108,14 @@ public class LedgerService implements UDPService {
 
                             Optional<LedgerResponse> response = Optional.empty();
                             switch (message.getType()) {
-                                case REQUEST -> {
+                                case CREATE -> {
+                                    createAccount((LedgerRequest) message);
+                                }
+                                case TRANSFER -> {
+                                    transfer((LedgerRequest) message);
+                                }
+                                case BALANCE -> {
 
-                                    LedgerRequestTransfer request = (LedgerRequestTransfer) message;
-
-                                    if (!verifyClientSignature(request)) {
-                                        LOGGER.log(Level.INFO, MessageFormat.format(
-                                                "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                                              + "@       WARNING: INVALID CLIENT SIGNATURE!      @\n"
-                                              + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                                              + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
-                                                message.getSenderId()));
-                                        return;
-                                    }
-
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received {1} message from {2}",
-                                                    nodeId, request.getValue().equals("") ? "READ" : "APPEND",
-                                                    message.getSenderId()));
-                                    response = requestConsensus(request);
                                 }
                                 case ACK -> {
                                     LOGGER.log(Level.INFO,
