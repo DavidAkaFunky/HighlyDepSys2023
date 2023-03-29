@@ -10,7 +10,9 @@ public enum ErrorMessage {
     CannotOpenSocket("Error while opening socket"),
     SignatureDoesntMatch("The message signature is not valid"),
     FailedToSignMessage("Error while signing message"),
-    CannotParseMessage("Error while parsing received message");
+    CannotParseMessage("Error while parsing received message"),
+    InvalidAccount("Invalid account id"),
+    FailedToReadPublicKey("Error while reading public key");
 
     private final String message;
 

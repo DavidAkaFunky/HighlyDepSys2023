@@ -1,41 +1,24 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
 import java.math.BigDecimal;
+import java.security.PublicKey;
 
-public class LedgerRequestTransfer extends Message {
+public class LedgerRequestTransfer {
 
-    // Message identifier
+    // Client nonce
     private int nonce;
-    // Stored blockchain size
-    private int knownBlockchainSize;
-    // Destination ID
-    private String destId;
+    // Source Public Key
+    private PublicKey sourcePubKey;
+    // Destination Public Key
+    private PublicKey destinationPubKey;
     // Amount to transfer
     private BigDecimal amount;
-    // Signature of amount with client's private key
-    private String clientSignature;
 
-    public LedgerRequestTransfer(Type type, String senderId, int nonce, BigDecimal amount, int knownBlockchainSize) {
-        super(senderId, type);
-        this.amount = amount;
+    public LedgerRequestTransfer(int nonce, PublicKey sourcePubKey, PublicKey destinationPubKey, BigDecimal amount) {
         this.nonce = nonce;
-        this.knownBlockchainSize = knownBlockchainSize;
-    }
-
-    public BigDecimal getAmount() {
-        return amount;
-    }
-
-    public void setAmount(BigDecimal amount) {
+        this.sourcePubKey = sourcePubKey;
+        this.destinationPubKey = destinationPubKey;
         this.amount = amount;
-    }
-
-    public String getClientSignature() {
-        return clientSignature;
-    }
-
-    public void setClientSignature(String clientSignature) {
-        this.clientSignature = clientSignature;
     }
 
     public int getNonce() {
@@ -46,11 +29,27 @@ public class LedgerRequestTransfer extends Message {
         this.nonce = nonce;
     }
 
-    public int getKnownBlockchainSize() {
-        return knownBlockchainSize;
+    public PublicKey getSourcePubKey() {
+        return sourcePubKey;
     }
 
-    public void setKnownBlockchainSize(int knownBlockchainSize) {
-        this.knownBlockchainSize = knownBlockchainSize;
+    public void setSourcePubKey(PublicKey sourcePubKey) {
+        this.sourcePubKey = sourcePubKey;
+    }
+
+    public PublicKey getDestinationPubKey() {
+        return destinationPubKey;
+    }
+
+    public void setDestinationPubKey(PublicKey destinationPubKey) {
+        this.destinationPubKey = destinationPubKey;
+    }
+
+    public BigDecimal getAmount() {
+        return amount;
+    }
+
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
     }
 }

@@ -13,7 +13,7 @@ public class Message implements Serializable {
 
     public enum Type {
         // For Ledger Requests
-        TRANSFER, READ,
+        CREATE, TRANSFER, BALANCE,
         // For Node Messages
         PRE_PREPARE, PREPARE, COMMIT, DECIDE, ACK, IGNORE,
         // For Ledger Responses

@@ -31,7 +31,7 @@ public class RSAEncryption {
         return content;
     }
 
-    private static PublicKey readPublicKey(String publicKeyPath)
+    public static PublicKey readPublicKey(String publicKeyPath)
             throws FileNotFoundException, IOException, NoSuchAlgorithmException, InvalidKeySpecException {
 
         byte[] pubEncoded = readFile(publicKeyPath);
@@ -42,7 +42,7 @@ public class RSAEncryption {
         return pub;
     }
 
-    private static PrivateKey readPrivateKey(String privateKeyPath)
+    public static PrivateKey readPrivateKey(String privateKeyPath)
             throws FileNotFoundException, IOException, NoSuchAlgorithmException, InvalidKeySpecException {
 
         byte[] privEncoded = readFile(privateKeyPath);

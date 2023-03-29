@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.library;
 
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
@@ -8,34 +9,41 @@ import pt.ulisboa.tecnico.hdsledger.utilities.*;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.security.PublicKey;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
+
+import com.google.gson.Gson;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Library {
 
     private static final CustomLogger LOGGER = new CustomLogger(Library.class.getName());
+    // Client configs
+    private final ProcessConfig[] clientConfigs;
     // Config details of node leader
     private final ProcessConfig leader;
-    // Known blockchain
-    private final List<String> blockchain = new ArrayList<>();
     // Client identifier
     private final ProcessConfig config;
     // Link to communicate with blockchain nodes
     private PerfectLink link;
     // Map of responses from nodes
     private final Map<Integer, LedgerResponse> responses = new HashMap<>();
-    // Current request ID
-    private AtomicInteger requestId = new AtomicInteger(0);
+    // Current client nonce
+    private AtomicInteger nonce = new AtomicInteger(0);
 
-    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs) {
-        this(clientConfig, nodeConfigs, true);
+    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, ProcessConfig[] clientConfigs) {
+        this(clientConfig, nodeConfigs, clientConfigs, true);
     }
 
-    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, boolean activateLogs)
+    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, ProcessConfig[] clientConfigs,
+            boolean activateLogs)
             throws LedgerException {
+
+        this.clientConfigs = clientConfigs;
 
         this.config = clientConfig;
 
@@ -44,101 +52,15 @@ public class Library {
         if (leader.isEmpty())
             throw new LedgerException(ErrorMessage.ConfigFileFormat);
         this.leader = leader.get();
-        
+
+        // Create link to communicate with nodes
         this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class,
                 activateLogs);
 
+        // Disable logs if necessary
         if (!activateLogs) {
             LogManager.getLogManager().reset();
         }
-    }
-
-    public List<String> getBlockchain() {
-        return blockchain;
-    }
-
-    private List<String> getBlockchainWithoutSpaces(List<String> blockchain) {
-        List<String> blockchainWithoutSpaces = new ArrayList<>();
-        for (String value : blockchain) {
-            if (!value.equals(""))
-                blockchainWithoutSpaces.add(value);
-        }
-        return blockchainWithoutSpaces;
-    }
-
-    /*
-     * Print the known blockchain content
-     */
-    public void printBlockchain() {
-        System.out.println("Known blockchain content: " + getBlockchainWithoutSpaces(getBlockchain()));
-    }
-
-    /*
-     * Print the new blockchain content
-     *
-     * @param blockchainValues the new blockchain content
-     */
-    public void printNewBlockchainValues(List<String> blockchainValues) {
-        System.out.println("New blockchain content: " + getBlockchainWithoutSpaces(blockchainValues));
-    }
-
-    /*
-     * Append a value to the blockchain
-     * This method is intentionally blocking
-     *
-     * @param value the value to be appended
-     */
-    public List<String> append(String value) {
-
-        return requestBlockchainOperation(value);
-    }
-
-    /*
-     * Read blockchain
-     * This method is intentionally blocking
-     *
-     * @param value the value to be appended
-     */
-    public void read() {
-
-        requestBlockchainOperation("");
-    }
-
-    public List<String> requestBlockchainOperation(String value) {
-
-        int currentRequestId = this.requestId.getAndIncrement();
-
-        // Sign client input
-        String signature;
-        try{
-            signature = RSAEncryption.sign(value, config.getPrivateKeyPath());
-        } catch (Exception e) {
-            throw new LedgerException(ErrorMessage.FailedToSignMessage);
-        }
-
-        LedgerRequestTransfer request = new LedgerRequestTransfer(LedgerRequest.Type.REQUEST, this.config.getId(), currentRequestId,
-                value, this.blockchain.size());
-
-        request.setClientSignature(signature);
-
-        this.link.broadcast(request);
-
-        LedgerResponse ledgerResponse;
-
-        while ((ledgerResponse = responses.get(currentRequestId)) == null) {
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-
-        // Add new values to the blockchain
-        List<String> blockchainValues = ledgerResponse.getValues();
-        blockchain.addAll(ledgerResponse.getValues().stream().toList());
-
-        responses.remove(currentRequestId);
-        return blockchainValues;
     }
 
     /*
@@ -149,19 +71,57 @@ public class Library {
     }
 
     /*
-     * Transfer money from one account to another
-     */
-    public void transfer(String sourceId, String destinationId, BigDecimal amount) {
-
-    }
-
-    /*
      * Read account balance
      */
     public void read(String accountId, String consistencyMode) {
 
     }
-    
+
+    /*
+     * Transfer money from one account to another
+     */
+    public void transfer(String sourceId, String destinationId, BigDecimal amount) {
+
+        int currentNonce = this.nonce.getAndIncrement();
+
+        // Get source and destination public keys
+        Optional<ProcessConfig> sourceConfig = Arrays.stream(this.clientConfigs).filter(c -> c.getId().equals(sourceId))
+                .findFirst();
+        Optional<ProcessConfig> destinationConfig = Arrays.stream(this.clientConfigs)
+                .filter(c -> c.getId().equals(destinationId))
+                .findFirst();
+
+        if (sourceConfig.isEmpty() || destinationConfig.isEmpty())
+            throw new LedgerException(ErrorMessage.InvalidAccount);
+
+        PublicKey sourcePubKey, destinationPubKey;
+        try {
+            sourcePubKey = RSAEncryption.readPublicKey(sourceConfig.get().getPublicKeyPath());
+            destinationPubKey = RSAEncryption.readPublicKey(destinationConfig.get().getPublicKeyPath());
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+        }
+
+        // Create transfer request and sign it
+        LedgerRequestTransfer requestTransfer = new LedgerRequestTransfer(currentNonce, sourcePubKey, destinationPubKey,
+                amount);
+
+        String requestTransferSerialized = new Gson().toJson(requestTransfer);
+
+        String signature;
+        try {
+            signature = RSAEncryption.sign(requestTransferSerialized, config.getPrivateKeyPath());
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToSignMessage);
+        }
+
+        // Send generic ledger request with signature
+        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.TRANSFER, requestTransferSerialized,
+                signature);
+
+        this.link.broadcast(request);
+    }
+
     public void listen() {
         try {
             // Thread to listen on every request

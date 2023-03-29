@@ -22,7 +22,7 @@ public class Client {
         System.out.println("Your client ID is: " + clientId);
         System.out.println("Type 'create <account_id>' to create an account.");
         System.out.println("Type 'transfer <source_id> <destination_id> <amount>' to transfer a given amount from one account to another.");
-        System.out.println("Type 'read <account_id> <strong|weak>' to read the blockchain.");
+        System.out.println("Type 'balance <account_id> <strong|weak>' to read the current account balance.");
         System.out.println("Type 'exit' to exit the program.");
     }
 
@@ -54,7 +54,7 @@ public class Client {
         }
 
         // Library to interact with the blockchain
-        final Library library = new Library(config, nodeConfigs, showDebugLogs);
+        final Library library = new Library(config, nodeConfigs, clientConfigs, showDebugLogs);
         library.listen();
 
         // Initial text
@@ -94,7 +94,7 @@ public class Client {
                     System.out.println("Transferring " + amount + " from " + sourceId + " to " + destinationId + "...");
                     library.transfer(sourceId, destinationId, amount);
                 }
-                case "read" -> {
+                case "balance" -> {
                     if (tokens.length != 3) {
                         System.out.println("Invalid number of arguments for read command.");
                         continue;
