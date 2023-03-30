@@ -8,11 +8,12 @@ public enum ErrorMessage {
     SocketSendingError("Error while sending message"),
     SocketReceivingError("Error while receiving message"),
     CannotOpenSocket("Error while opening socket"),
-    SignatureDoesntMatch("The message signature is not valid"),
+    SignatureDoesNotMatch("The message signature is not valid"),
     FailedToSignMessage("Error while signing message"),
     CannotParseMessage("Error while parsing received message"),
     InvalidAccount("Invalid account id"),
-    FailedToReadPublicKey("Error while reading public key");
+    FailedToReadPublicKey("Error while reading public key"),
+    NoLeader("Error while getting leader");
 
     private final String message;
 

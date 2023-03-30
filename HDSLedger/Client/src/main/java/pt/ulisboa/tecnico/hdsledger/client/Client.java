@@ -102,8 +102,7 @@ public class Client {
                     String accountId = tokens[1];
                     String consistencyMode = tokens[2];
                     System.out.println("Reading blockchain with " + consistencyMode + " mode...");
-                    library.read(accountId, consistencyMode);
-                    library.printBlockchain();
+                    library.balance(accountId, consistencyMode);
                 }
                 case "exit" -> {
                     System.out.println("Exiting...");

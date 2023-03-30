@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.models;
 
+import java.util.List;
+
 public class Block {
 
     // Consensus instance 

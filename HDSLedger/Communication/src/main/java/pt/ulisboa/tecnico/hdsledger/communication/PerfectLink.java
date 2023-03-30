@@ -14,17 +14,21 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.net.SocketException;
 import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.UUID;
+import java.util.Map.Entry;
 
 import com.google.gson.Gson;
 
@@ -37,6 +41,8 @@ public class PerfectLink {
     private final DatagramSocket socket;
     // Map of all nodes in the network
     private final Map<String, ProcessConfig> nodes = new ConcurrentHashMap<>();
+    // Number of maximum byzantine nodes
+    private final int maxByzantineNodeCount;
     // Set of received messages from specific node (prevent duplicates)
     private Map<String, Set<Integer>> receivedMessages = new ConcurrentHashMap<>();
     // Set of received ACKs from specific node
@@ -54,8 +60,11 @@ public class PerfectLink {
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
             boolean activateLogs) {
+
         this.config = self;
         this.messageClass = messageClass;
+        this.maxByzantineNodeCount = Math.floorDiv(nodes.length - 1, 3);
+
         Arrays.stream(nodes).forEach(node -> {
             String id = node.getId();
             this.nodes.put(id, node);
@@ -80,6 +89,61 @@ public class PerfectLink {
     public void broadcast(Message data) {
         Gson gson = new Gson();
         nodes.forEach((destId, dest) -> send(destId, gson.fromJson(gson.toJson(data), data.getClass())));
+    }
+
+    /*
+     * Multicast to f+1 nodes in the network
+     * 
+     * @param data The message to be broadcasted
+     */
+    public void smallQuorumMulticast(Message data) {
+        multicast(data, maxByzantineNodeCount + 1);
+    }
+
+    /*
+     * Multicast to 2f+1 nodes in the network
+     * 
+     * @param data The message to be broadcasted
+     */
+    public void quorumMulticast(Message data) {
+        multicast(data, 2 * maxByzantineNodeCount + 1);
+    }
+
+    /*
+     * Multicast a message to N nodes in the network
+     *
+     * @param data The message to be broadcasted
+     * 
+     * @param n The number of nodes to send the message to
+     */
+    public void multicast(Message data, int n) {
+        List<String> nodeKeys = new ArrayList<String>(nodes.keySet());
+
+        if (n > nodeKeys.size())
+            throw new LedgerException(ErrorMessage.NoLeader);
+        if (n == nodeKeys.size())
+            broadcast(data);
+
+        Gson gson = new Gson();
+
+        // Ensure that leader is always in the list
+        Optional<Entry<String, ProcessConfig>> leader = nodes.entrySet().stream()
+                .filter((config) -> config.getValue().isLeader()).findFirst();
+        if (leader.isEmpty())
+            throw new LedgerException(ErrorMessage.NoLeader);
+
+        // Select n random nodes
+        Random random = new Random();
+        List<String> keys = new ArrayList<String>();
+        keys.add(leader.get().getKey());
+
+        while (keys.size() < n) {
+            String randomKey = nodeKeys.get(random.nextInt(nodeKeys.size()));
+            if (!keys.contains(randomKey))
+                keys.add(randomKey);
+        }
+
+        keys.forEach(destId -> send(destId, gson.fromJson(gson.toJson(data), data.getClass())));
     }
 
     /*
@@ -212,10 +276,10 @@ public class PerfectLink {
 
             LOGGER.log(Level.INFO, MessageFormat.format(
                     "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                  + "@      WARNING: INVALID MESSAGE SIGNATURE!      @\n"
-                  + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                  + "IT IS POSSIBLE THAT NODE {0}:{1} IS DOING SOMETHING NASTY!",
-                  InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
+                            + "@      WARNING: INVALID MESSAGE SIGNATURE!      @\n"
+                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "IT IS POSSIBLE THAT NODE {0}:{1} IS DOING SOMETHING NASTY!",
+                    InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
 
             return message;
         }
@@ -226,7 +290,8 @@ public class PerfectLink {
         if (!nodes.containsKey(senderId))
             throw new LedgerException(ErrorMessage.NoSuchNode);
 
-        // Handle ACKS, since it's possible to receive multiple acks from the same message
+        // Handle ACKS, since it's possible to receive multiple acks from the same
+        // message
         if (message.getType().equals(NodeMessage.Type.ACK)) {
             receivedAcks.add(messageId);
             return message;

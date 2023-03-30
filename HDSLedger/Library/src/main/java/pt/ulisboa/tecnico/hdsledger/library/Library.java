@@ -101,13 +101,13 @@ public class Library {
         LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.TRANSFER, requestTransferSerialized,
                 signature);
 
-        this.link.broadcast(request);
+        this.link.smallQuorumMulticast(request);
     }
 
     /*
      * Read account balance
      */
-    public void read(String accountId, String consistencyMode) {
+    public void balance(String accountId, String consistencyMode) {
 
         // Get account public key
         Optional<ProcessConfig> accountConfig = Arrays.stream(this.clientConfigs).filter(c -> c.getId().equals(accountId))
@@ -139,7 +139,7 @@ public class Library {
         LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.BALANCE, requestTransferSerialized,
                 signature);
 
-        this.link.broadcast(request);
+        this.link.smallQuorumMulticast(request);
     }
 
     /*
@@ -184,7 +184,7 @@ public class Library {
         LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.TRANSFER, requestTransferSerialized,
                 signature);
 
-        this.link.broadcast(request);
+        this.link.smallQuorumMulticast(request);
     }
 
     public void listen() {
