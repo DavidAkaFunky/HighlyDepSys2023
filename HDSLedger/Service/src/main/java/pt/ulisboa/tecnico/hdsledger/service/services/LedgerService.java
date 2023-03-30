@@ -6,6 +6,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
+import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
@@ -16,10 +17,14 @@ import java.text.MessageFormat;
 import java.util.logging.Level;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
 public class LedgerService implements UDPService {
@@ -33,16 +38,17 @@ public class LedgerService implements UDPService {
     private final NodeService service;
     // Link to communicate with blockchain nodes
     private final PerfectLink link;
-    // Map of requests from clients
-    private final Map<String, Integer> clientRequests = new ConcurrentHashMap<>();
     // Thread to run service
     private Thread thread;
+    // Blockchain
+    private final Map<Integer, Block> blockchain = new ConcurrentHashMap<>();
     // Map of unconfirmed transactions
-    private final Map<String, LedgerRequest> unconfirmedTransactions = new ConcurrentHashMap<>();
+    private final Queue<LedgerRequest> mempool = new ConcurrentLinkedQueue<LedgerRequest>();
     // Block size
     private final int blockSize;
 
-    public LedgerService(ProcessConfig[] clientConfigs, String nodeId, NodeService service, PerfectLink link, int blockSize) {
+    public LedgerService(ProcessConfig[] clientConfigs, String nodeId, NodeService service, PerfectLink link,
+            int blockSize) {
         this.clientConfigs = clientConfigs;
         this.nodeId = nodeId;
         this.service = service;
@@ -80,26 +86,54 @@ public class LedgerService implements UDPService {
         return false;
     }
 
-    public Optional<LedgerResponse> createAccount(LedgerRequest request) {
-        if (!verifyClientSignature(request))
-            return Optional.empty();
+    public void createAccount(LedgerRequest request) {
+        if (!verifyClientSignature(request)) {
+            // reply to client
+        }
+        mempool.add(request);
         
+        // Tecnicamente só os nao-lideres deviam dar set do timer
+
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run(){
+                System.out.println("Timer ran");
+            }
+        }, 2*60*1000);
     }
 
-    public Optional<LedgerResponse> transfer(LedgerRequest request) {
-        if (!verifyClientSignature(request))
-            return Optional.empty();
-        
+    public void transfer(LedgerRequest request) {
+        if (!verifyClientSignature(request)) {
+            // reply to client
+        }
+        mempool.add(request);
+
+        // Tecnicamente só os nao-lideres deviam dar set do timer
+
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run(){
+                System.out.println("Timer ran");
+            }
+        }, 2*60*1000);
+    }
+
+    public void balance(LedgerRequest request) {
+        if (!verifyClientSignature(request)) {
+            // reply to client
+        }
+        // do weird consensus
     }
 
     private void checkBlockSize() {
-        if (unconfirmedTransactions.size() >= blockSize) {
-            // Create block
+
+        if (mempool.size() >= blockSize) {
             Block block = new Block();
-            for (Entry<String, LedgerRequest> item : unconfirmedTransactions.entrySet()) {
-                if (item.getKey() != null) {
-                    block.add(unconfirmedTransactions.remove(item.getKey()));
-                }
+            // Add blockSize transactions to block
+            for (int i = 0; i < blockSize; i++) {
+                block.addRequest(mempool.poll());
             }
             // Start consensus to add block to blockchain
             service.startConsensus(block);
@@ -131,7 +165,7 @@ public class LedgerService implements UDPService {
                                     transfer((LedgerRequest) message);
                                 }
                                 case BALANCE -> {
-
+                                    balance((LedgerRequest) message);
                                 }
                                 case ACK -> {
                                     LOGGER.log(Level.INFO,
@@ -153,6 +187,9 @@ public class LedgerService implements UDPService {
 
                             // Reply to a specific client
                             link.send(message.getSenderId(), response.get());
+
+                            // After receiving a message try to create a block
+                            checkBlockSize();
 
                         }).start();
                     }

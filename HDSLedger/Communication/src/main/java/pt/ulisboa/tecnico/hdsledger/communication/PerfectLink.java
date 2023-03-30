@@ -153,6 +153,8 @@ public class PerfectLink {
      * 
      * @param data The message to be broadcasted
      */
+    // TODO: Fix me, cant have node message here because of circular dependency
+    /*
     public void badBroadcast(NodeMessage data) {
         Gson gson = new Gson();
         nodes.forEach((destId, dest) -> {
@@ -163,6 +165,7 @@ public class PerfectLink {
             send(destId, badData);
         });
     }
+    */
 
     /*
      * Sends a message to a specific node with guarantee of delivery

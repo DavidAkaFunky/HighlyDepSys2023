@@ -4,12 +4,12 @@ public class InstanceInfo {
 
     private int currentRound = 1;
     private int preparedRound = -1;
-    private String preparedValue;
-    private String inputValue;
+    private Block preparedBlock;
+    private Block inputBlock;
     private int committedRound = -1;
 
-    public InstanceInfo(String inputValue) {
-        this.inputValue = inputValue;
+    public InstanceInfo(Block inputBlock) {
+        this.inputBlock = inputBlock;
     }
 
     public int getCurrentRound() {
@@ -28,20 +28,20 @@ public class InstanceInfo {
         this.preparedRound = preparedRound;
     }
 
-    public String getPreparedValue() {
-        return preparedValue;
+    public Block getPreparedBlock() {
+        return preparedBlock;
     }
 
-    public void setPreparedValue(String preparedValue) {
-        this.preparedValue = preparedValue;
+    public void setPreparedBlock(Block preparedBlock) {
+        this.preparedBlock = preparedBlock;
     }
 
-    public String getInputValue() {
-        return inputValue;
+    public Block getInputBlock() {
+        return inputBlock;
     }
 
-    public void setInputValue(String inputValue) {
-        this.inputValue = inputValue;
+    public void setInputBlock(Block inputBlock) {
+        this.inputBlock = inputBlock;
     }
 
     public int getCommittedRound() {

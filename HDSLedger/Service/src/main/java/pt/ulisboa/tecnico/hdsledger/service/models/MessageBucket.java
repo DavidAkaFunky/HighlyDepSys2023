@@ -9,7 +9,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.text.MessageFormat;
 
-import pt.ulisboa.tecnico.hdsledger.communication.NodeMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 public class MessageBucket {
@@ -33,8 +32,8 @@ public class MessageBucket {
      * @param message
      */
     public void addMessage(NodeMessage message) {
-        int consensusInstance = Integer.parseInt(message.getArgs().get(0));
-        int round = Integer.parseInt(message.getArgs().get(1));
+        int consensusInstance = message.getConsensusInstance();
+        int round = message.getRound();
 
         bucket.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
         bucket.get(consensusInstance).putIfAbsent(round, new ArrayList<>());
@@ -49,20 +48,20 @@ public class MessageBucket {
      * 
      * @param round
      */
-    public Optional<String> hasValidQuorum(String nodeId, int instance, int round) {
+    public Optional<Block> hasValidQuorum(String nodeId, int instance, int round) {
 
         // Create mapping of value to frequency
-        HashMap<String, Integer> frequency = new HashMap<String, Integer>();
+        HashMap<Block, Integer> frequency = new HashMap<Block, Integer>();
         bucket.get(instance).get(round).forEach((message) -> {
-            String value = message.getArgs().get(message.getArgs().size() - 1);
-            frequency.put(value, frequency.getOrDefault(value, 0) + 1);
+            Block block = message.getBlock();
+            frequency.put(block, frequency.getOrDefault(block, 0) + 1);
         });
 
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
-        return frequency.entrySet().stream().filter((Map.Entry<String, Integer> entry) -> {
+        return frequency.entrySet().stream().filter((Map.Entry<Block, Integer> entry) -> {
             return entry.getValue() >= quorumSize;
-        }).map((Map.Entry<String, Integer> entry) -> {
+        }).map((Map.Entry<Block, Integer> entry) -> {
             return entry.getKey();
         }).findFirst();
     }
@@ -77,9 +76,9 @@ public class MessageBucket {
      * 
      * @param round The round
      */
-    public void verifyReceivedMessages(String value, int instance, int round) {
+    public void verifyReceivedMessages(Block block, int instance, int round) {
         bucket.get(instance).get(round).forEach((message) -> {
-            if (!message.getArgs().get(message.getArgs().size() - 1).equals(value))
+            if (!message.getBlock().equals(block))
                 LOGGER.log(Level.INFO, MessageFormat.format(
                         "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
                                 + "@      WARNING: DIFFERENT VALUES RECEIVED!      @\n"
