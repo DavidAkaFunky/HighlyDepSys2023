@@ -36,7 +36,7 @@ public class PerfectLink {
 
     private static final CustomLogger LOGGER = new CustomLogger(PerfectLink.class.getName());
     // Time to wait for an ACK before resending the message
-    private static final int ACK_WAIT_TIME = 1000;
+    private static final int BASE_SLEEP_TIME = 200;
     // UDP Socket
     private final DatagramSocket socket;
     // Map of all nodes in the network
@@ -191,6 +191,7 @@ public class PerfectLink {
                 int destPort = node.getPort();
                 int count = 1;
                 int messageId = data.getMessageId();
+                int sleepTime = BASE_SLEEP_TIME;
 
                 for (;;) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
@@ -199,12 +200,15 @@ public class PerfectLink {
 
                     unreliableSend(destAddress, destPort, data);
 
-                    // Wait, then look for ACK
-                    Thread.sleep(ACK_WAIT_TIME);
+                    // Wait (using exponential back-off), then look for ACK
+                    Thread.sleep(sleepTime);
 
                     // receive method will set receivedAcks when sees corresponding ACK
                     if (receivedAcks.contains(messageId))
                         break;
+
+                    // Might be a problem if it overflows (unlikely)
+                    sleepTime <<= 1;
                 }
 
                 LOGGER.log(Level.INFO, MessageFormat.format("{0} - NodeMessage {1} sent to {2}:{3} successfully",
@@ -275,7 +279,7 @@ public class PerfectLink {
         if (config.getByzantineBehavior() == ByzantineBehavior.NONE
                 && !RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
                         nodes.get(message.getSenderId()).getPublicKeyPath())) {
-            message.setType(NodeMessage.Type.IGNORE);
+            message.setType(Message.Type.IGNORE);
 
             LOGGER.log(Level.INFO, MessageFormat.format(
                     "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
@@ -295,7 +299,7 @@ public class PerfectLink {
 
         // Handle ACKS, since it's possible to receive multiple acks from the same
         // message
-        if (message.getType().equals(NodeMessage.Type.ACK)) {
+        if (message.getType().equals(Message.Type.ACK)) {
             receivedAcks.add(messageId);
             return message;
         }
@@ -305,20 +309,49 @@ public class PerfectLink {
 
         // Message already received (add returns false if already exists) => Discard
         if (!receivedMessages.get(message.getSenderId()).add(messageId)) {
-            message.setType(NodeMessage.Type.IGNORE);
+            message.setType(Message.Type.IGNORE);
         }
+
+        if (message.getType().equals(Message.Type.PREPARE) || message.getType().equals(Message.Type.COMMIT)){
+            NodeMessage nodeMessage = (NodeMessage) message;
+            if (nodeMessage.getReplyTo() != null && nodeMessage.getReplyTo().equals(config.getId())){
+                receivedAcks.add(nodeMessage.getReplyToMessageId());
+                return message;
+            }
+        }
+
+        if (message.getType().equals(Message.Type.PRE_PREPARE) || message.getType().equals(Message.Type.PREPARE))
+            return message;
 
         InetAddress address = InetAddress.getByName(response.getAddress().getHostAddress());
         int port = response.getPort();
 
-        Message responseMessage = new Message(this.config.getId(), NodeMessage.Type.ACK);
-        responseMessage.setMessageId(message.getMessageId());
+        sendAck(address, port, messageId);
+        return message;
+    }
+
+    public void sendAck(InetAddress address, int port, int messageId) {
+        Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
+        responseMessage.setMessageId(messageId);
 
         // ACK is sent without needing for another ACK because
         // we're assuming an eventually synchronous network
         // Even if a node receives the message multiple times,
         // it will discard duplicates
         unreliableSend(address, port, responseMessage);
-        return message;
+    }
+
+    public void sendAck(String nodeId, int messageId) {
+        ProcessConfig node = nodes.get(nodeId);
+        if (node == null)
+            throw new LedgerException(ErrorMessage.NoSuchNode);
+
+        try {
+            InetAddress address = InetAddress.getByName(node.getHostname());
+            int port = node.getPort();
+            sendAck(address, port, messageId);
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
     }
 }

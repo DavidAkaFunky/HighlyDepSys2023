@@ -6,7 +6,6 @@ import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.service.models.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.service.models.NodeMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
@@ -14,9 +13,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
 import java.text.MessageFormat;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,7 +21,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import java.util.logging.Level;
-import java.util.stream.Collectors;
 
 public class NodeService implements UDPService {
 
@@ -127,11 +123,12 @@ public class NodeService implements UDPService {
         int round = message.getRound();
         Block block = message.getBlock();
         String senderId = message.getSenderId();
+        int senderMessageId = message.getMessageId();
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Block {4}",
-                        config.getId(), message.getSenderId(), consensusInstance, round, block));
+                        config.getId(), senderId, consensusInstance, round, block));
 
         // BYZANTINE_TESTS
         if (this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.NONE
@@ -178,13 +175,18 @@ public class NodeService implements UDPService {
                     MessageFormat.format(
                             "{0} - Already received PRE-PREPARE message for Consensus Instance {1}, Round {2}, ignoring",
                             config.getId(), consensusInstance, round));
+
+            // Send regular ack
+            link.sendAck(senderId, senderMessageId);
             return Optional.empty();
         }
 
         NodeMessage prepareMessage = new NodeMessage(config.getId(), NodeMessage.Type.PREPARE);
-        prepareMessage.setConsensusInstance(message.getConsensusInstance());
-        prepareMessage.setRound(message.getRound());
-        prepareMessage.setBlock(message.getBlock());
+        prepareMessage.setConsensusInstance(consensusInstance);
+        prepareMessage.setRound(round);
+        prepareMessage.setBlock(block);
+        prepareMessage.setReplyTo(senderId);
+        prepareMessage.setReplyToMessageId(senderMessageId);
 
         return Optional.of(prepareMessage);
     }
@@ -200,11 +202,12 @@ public class NodeService implements UDPService {
         int round = message.getRound();
         Block block = message.getBlock();
         String senderId = message.getSenderId();
+        int senderMessageId = message.getMessageId();
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
                         "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}, Block {4}",
-                        config.getId(), message.getSenderId(), consensusInstance, round, block));
+                        config.getId(), senderId, consensusInstance, round, block));
 
         // Verify every transaction signature
         for (int i = 0; i < block.getRequests().size(); i++) {
@@ -240,6 +243,9 @@ public class NodeService implements UDPService {
                     MessageFormat.format(
                             "{0} - Already received PREPARE message for Consensus Instance {1}, Round {2}, ignoring",
                             config.getId(), consensusInstance, round));
+    
+            // Send regular ack
+            link.sendAck(senderId, senderMessageId);
             return Optional.empty();
         }
 
@@ -257,9 +263,11 @@ public class NodeService implements UDPService {
             instance.setPreparedBlock(preparedBlock.get());
 
             NodeMessage commitMessage = new NodeMessage(config.getId(), NodeMessage.Type.COMMIT);
-            commitMessage.setConsensusInstance(message.getConsensusInstance());
-            commitMessage.setRound(message.getRound());
-            commitMessage.setBlock(message.getBlock());
+            commitMessage.setConsensusInstance(consensusInstance);
+            commitMessage.setRound(round);
+            commitMessage.setBlock(block);
+            commitMessage.setReplyTo(senderId);
+            commitMessage.setReplyToMessageId(senderMessageId);
 
             return Optional.of(commitMessage);
         }
