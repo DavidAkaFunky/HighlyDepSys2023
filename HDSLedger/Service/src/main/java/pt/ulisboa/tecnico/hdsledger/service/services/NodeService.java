@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
+import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.service.models.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
@@ -101,7 +102,7 @@ public class NodeService implements UDPService {
      * 
      * @param inputValue Value to be agreed upon
      */
-    public int startConsensus(LedgerRequestTransfer request) {
+    public int startConsensus(Block request) {
 
         String inputValue = request.getValue();
         String inputValueSignature = request.getClientSignature();

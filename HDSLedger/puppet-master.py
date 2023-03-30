@@ -18,6 +18,7 @@ server_configs = [
     "bad_consensus_config.json",
 ]
 server_config = server_configs[0]
+block_size = 5
 
 # Compile classes
 os.system("mvn clean install")
@@ -30,7 +31,7 @@ with open("Service/src/main/resources/" + server_config) as f:
         pid = os.fork()
         if pid == 0:
             os.system(
-                f"{terminal} sh -c \"cd Service; mvn exec:java -Dexec.args='{key['id']} {server_config}' ; sleep 1000\"")
+                f"{terminal} sh -c \"cd Service; mvn exec:java -Dexec.args='{key['id']} {server_config} {block_size}' ; sleep 500\"")
             sys.exit()
 
 # Spawn blockchain clients
@@ -42,5 +43,5 @@ with open("Client/src/main/resources/client_config.json") as f:
         if pid == 0:
             debug_str = "-debug" if debug else ""
             os.system(
-                f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {server_config} {debug_str}' ; sleep 1000\"")
+                f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {server_config} {debug_str}' ; sleep 500\"")
             sys.exit()

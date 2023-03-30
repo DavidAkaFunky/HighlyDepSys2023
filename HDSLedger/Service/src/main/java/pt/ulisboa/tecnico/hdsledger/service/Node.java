@@ -28,6 +28,7 @@ public class Node {
             // Single command line argument (id)
             String id = args[0];
             nodesConfigPath += args[1];
+            int blockSize = Integer.parseInt(args[2]);
 
             ProcessConfig[] otherNodes = new ProcessConfigBuilder().fromFile(nodesConfigPath);
             String leaderId = Arrays.stream(otherNodes).filter(ProcessConfig::isLeader).findAny().get().getId();
@@ -58,7 +59,7 @@ public class Node {
 
             // Services that implement listen from UDPService
             NodeService nodeService = new NodeService(clients, nodeConfig, linkToNodes, leaderId, otherNodes.length);
-            LedgerService ledgerService = new LedgerService(clients, id, nodeService, linkToClients);
+            LedgerService ledgerService = new LedgerService(clients, id, nodeService, linkToClients, blockSize);
 
             nodeService.listen();
             ledgerService.listen();

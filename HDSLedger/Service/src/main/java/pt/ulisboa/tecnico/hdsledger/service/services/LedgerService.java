@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
@@ -36,12 +37,17 @@ public class LedgerService implements UDPService {
     private final Map<String, Integer> clientRequests = new ConcurrentHashMap<>();
     // Thread to run service
     private Thread thread;
+    // Map of unconfirmed transactions
+    private final Map<String, LedgerRequest> unconfirmedTransactions = new ConcurrentHashMap<>();
+    // Block size
+    private final int blockSize;
 
-    public LedgerService(ProcessConfig[] clientConfigs, String nodeId, NodeService service, PerfectLink link) {
+    public LedgerService(ProcessConfig[] clientConfigs, String nodeId, NodeService service, PerfectLink link, int blockSize) {
         this.clientConfigs = clientConfigs;
         this.nodeId = nodeId;
         this.service = service;
         this.link = link;
+        this.blockSize = blockSize;
     }
 
     public Thread getThread() {
@@ -77,17 +83,27 @@ public class LedgerService implements UDPService {
     public Optional<LedgerResponse> createAccount(LedgerRequest request) {
         if (!verifyClientSignature(request))
             return Optional.empty();
-        while (clientRequests.get(request.getSenderId()))
-            response = createAccount(request.deserializeCreate());
+        
     }
 
     public Optional<LedgerResponse> transfer(LedgerRequest request) {
         if (!verifyClientSignature(request))
             return Optional.empty();
-
         
+    }
 
-        return Optional.empty();
+    private void checkBlockSize() {
+        if (unconfirmedTransactions.size() >= blockSize) {
+            // Create block
+            Block block = new Block();
+            for (Entry<String, LedgerRequest> item : unconfirmedTransactions.entrySet()) {
+                if (item.getKey() != null) {
+                    block.add(unconfirmedTransactions.remove(item.getKey()));
+                }
+            }
+            // Start consensus to add block to blockchain
+            service.startConsensus(block);
+        }
     }
 
     @Override

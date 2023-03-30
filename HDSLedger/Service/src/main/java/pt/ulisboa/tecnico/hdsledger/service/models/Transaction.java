@@ -18,4 +18,5 @@ public class Transaction {
     // Signature of the transaction (Non-Repudiation)
     private String signature;
 
+    
 }
