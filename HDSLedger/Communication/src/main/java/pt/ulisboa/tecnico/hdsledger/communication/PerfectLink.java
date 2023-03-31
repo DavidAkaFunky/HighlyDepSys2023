@@ -316,21 +316,16 @@ public class PerfectLink {
             NodeMessage nodeMessage = (NodeMessage) message;
             if (nodeMessage.getReplyTo() != null && nodeMessage.getReplyTo().equals(config.getId())){
                 receivedAcks.add(nodeMessage.getReplyToMessageId());
-                return message;
             }
+            return message;
         }
 
-        if (message.getType().equals(Message.Type.PRE_PREPARE) || message.getType().equals(Message.Type.PREPARE))
+        if (message.getType().equals(Message.Type.PRE_PREPARE))
             return message;
 
         InetAddress address = InetAddress.getByName(response.getAddress().getHostAddress());
         int port = response.getPort();
 
-        sendAck(address, port, messageId);
-        return message;
-    }
-
-    public void sendAck(InetAddress address, int port, int messageId) {
         Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
         responseMessage.setMessageId(messageId);
 
@@ -339,19 +334,6 @@ public class PerfectLink {
         // Even if a node receives the message multiple times,
         // it will discard duplicates
         unreliableSend(address, port, responseMessage);
-    }
-
-    public void sendAck(String nodeId, int messageId) {
-        ProcessConfig node = nodes.get(nodeId);
-        if (node == null)
-            throw new LedgerException(ErrorMessage.NoSuchNode);
-
-        try {
-            InetAddress address = InetAddress.getByName(node.getHostname());
-            int port = node.getPort();
-            sendAck(address, port, messageId);
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        }
+        return message;
     }
 }

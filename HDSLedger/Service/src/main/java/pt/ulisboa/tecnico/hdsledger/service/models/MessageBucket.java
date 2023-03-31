@@ -87,4 +87,8 @@ public class MessageBucket {
                         message.getSenderId()));
         });
     }
+
+    public List<NodeMessage> getMessages(int instance, int round) {
+        return bucket.get(instance).get(round);
+    }
 }
