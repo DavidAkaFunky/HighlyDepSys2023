@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.models;
 
 import java.util.Map;
+import pt.ulisboa.tecnico.hdsledger.ledger.Block;
 
 public class SignedBlock {
 

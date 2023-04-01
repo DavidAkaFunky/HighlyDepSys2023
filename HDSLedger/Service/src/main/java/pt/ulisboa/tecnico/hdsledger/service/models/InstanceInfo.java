@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.models;
 
+import pt.ulisboa.tecnico.hdsledger.ledger.Block;
+
 public class InstanceInfo {
 
     private int currentRound = 1;

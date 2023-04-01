@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.service.models;
+package pt.ulisboa.tecnico.hdsledger.ledger;
 
 import java.util.ArrayList;
 import java.util.List;

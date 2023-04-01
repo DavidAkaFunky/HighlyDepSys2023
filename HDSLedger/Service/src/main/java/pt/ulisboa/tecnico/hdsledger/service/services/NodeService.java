@@ -1,10 +1,10 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
-import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
-import pt.ulisboa.tecnico.hdsledger.service.models.Block;
+import pt.ulisboa.tecnico.hdsledger.ledger.Block;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.service.models.MessageBucket;
 import pt.ulisboa.tecnico.hdsledger.service.models.NodeMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -28,9 +28,6 @@ public class NodeService implements UDPService {
 
     private ProcessConfig[] clientsConfig;
 
-    // Store blocks
-    private final Map<Integer, Block> blockchain = new ConcurrentHashMap<>();
-
     // Current node is leader
     private ProcessConfig config;
 
@@ -42,6 +39,8 @@ public class NodeService implements UDPService {
     private String leaderId;
 
     private PerfectLink link;
+
+    private Ledger ledger = new Ledger();
 
     // Consensus instance -> Round -> List of prepare messages
     private final MessageBucket prepareMessages;
@@ -60,7 +59,7 @@ public class NodeService implements UDPService {
     }
 
     public void addBlock(int instance, Block block) {
-        blockchain.put(instance, block);
+        ledger.addBlock(instance, block);
     }
 
     public int getConsensusInstance() {

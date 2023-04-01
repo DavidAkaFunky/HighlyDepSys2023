@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.security.PublicKey;
 
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
+import pt.ulisboa.tecnico.hdsledger.ledger.Account;
 
 public class Transaction {
 

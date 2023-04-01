@@ -10,6 +10,7 @@ import java.util.logging.Level;
 import java.text.MessageFormat;
 
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
+import pt.ulisboa.tecnico.hdsledger.ledger.Block;
 
 public class MessageBucket {
 

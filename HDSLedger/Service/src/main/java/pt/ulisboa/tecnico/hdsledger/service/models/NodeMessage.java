@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.models;
 
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
+import pt.ulisboa.tecnico.hdsledger.ledger.Block;
 
 public class NodeMessage extends Message {
 
