@@ -184,6 +184,8 @@ public class Library {
         LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.TRANSFER, requestTransferSerialized,
                 signature);
 
+        // Signing the message on the perfect link is kind of bloat (the LedgerRequest is already properly signed),
+        // but let's keep it for now (might change later)
         this.link.smallQuorumMulticast(request);
     }
 

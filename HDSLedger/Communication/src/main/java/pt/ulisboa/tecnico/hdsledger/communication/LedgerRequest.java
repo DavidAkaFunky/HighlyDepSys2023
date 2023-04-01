@@ -50,7 +50,7 @@ public class LedgerRequest extends Message {
     }
 
     @Override
-    public boolean equals(Object o ){
+    public boolean equals(Object o){
         if (o == this) return true;
         if (!(o instanceof LedgerRequest)) {
             return false;
