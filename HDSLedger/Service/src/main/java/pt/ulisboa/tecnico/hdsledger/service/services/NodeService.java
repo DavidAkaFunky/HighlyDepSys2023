@@ -269,12 +269,21 @@ public class NodeService implements UDPService {
         if (instance.getPreparedRound() >= round) {
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Already received PREPARE message for Consensus Instance {1}, Round {2}, " + "replying again to make sure it reaches the initial sender", config.getId(), consensusInstance, round));
 
-            //TODO see comment on createCommitMessage
+            String blockSignature;
+            try {
+                blockSignature = RSAEncryption.sign(block.toJson(), this.config.getPrivateKeyPath());
+            } catch(Exception e) {
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Error signing block for consensus instance {1}", config.getId(), consensusInstance));
+                e.printStackTrace();
+                return;
+            }
+
             ConsensusMessage commitMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
                     .setConsensusInstance(consensusInstance)
                     .setRound(round)
                     .setReplyTo(senderId)
                     .setReplyToMessageId(senderMessageId)
+                    .setMessage(new CommitMessage(blockSignature).toJson())
                     .build();
 
             link.send(senderId, commitMessage);
@@ -294,16 +303,6 @@ public class NodeService implements UDPService {
             // instance and round (acknowledging that they have received the prepare)
             prepareMessages.getMessages(consensusInstance, round);
         }
-    }
-
-    //TODO sus, falta a própria commit message ig
-    private ConsensusMessage createCommitMessage(int consensusInstance, int round, String senderId, int senderMessageId) {
-        ConsensusMessage commitMessage = new ConsensusMessage(config.getId(), ConsensusMessage.Type.COMMIT);
-        commitMessage.setConsensusInstance(consensusInstance);
-        commitMessage.setRound(round);
-        commitMessage.setReplyTo(senderId);
-        commitMessage.setReplyToMessageId(senderMessageId);
-        return commitMessage;
     }
 
     /*
@@ -354,6 +353,17 @@ public class NodeService implements UDPService {
             instance.setCommittedRound(round);
 
             boolean successfulAdd = this.tryAddBlock(consensusInstance, Block.fromJson(committedBlock.get()));
+
+            /* TODO
+            *  responder aos clientes a dizer se correu bem
+            * if (successfulAdd) {
+            *    broadcast do "Decide" com a minha (replica) assinatura sobre cada \
+            *       balanco que foi alterado
+            * }
+            * Mensagem de Reply para cliente e mensagem de decide \
+            * (assinatura sobre instância de consenso + new balance para cada conta)
+            * (para maioria de assinaturas no soft read)
+            * */
 
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Decided on Consensus Instance {1}, Round {2}, Successful Add? {3}", config.getId(), consensusInstance, round, successfulAdd));
         }

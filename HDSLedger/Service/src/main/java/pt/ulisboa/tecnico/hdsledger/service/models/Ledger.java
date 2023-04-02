@@ -31,6 +31,9 @@ public class Ledger {
     }
 
     public boolean transfer(LedgerRequestTransfer request) {
+        BigDecimal amount = request.getAmount();
+        if (amount.compareTo(BigDecimal.ZERO) < 0) return false;
+
         String srcHash;
         String destHash;
         try {
@@ -39,7 +42,6 @@ public class Ledger {
         } catch (NoSuchAlgorithmException e) {
             return false;
         }
-        BigDecimal amount = request.getAmount();
         Account srcAccount = accounts.get(srcHash);
         Account destAccount = accounts.get(destHash);
         if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(amount)) {

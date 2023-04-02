@@ -1,40 +1,25 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-public class CommitMessage {
+import com.google.gson.Gson;
 
-    private int consensusInstance;
-    private int round;
+public class CommitMessage {
 
     // (Replica) Signature of the block
     private String blockSignature;
 
-    public CommitMessage(int consensusInstance, int round, String blockSignature) {
-        this.consensusInstance = consensusInstance;
-        this.round = round;
+    public CommitMessage(String blockSignature) {
         this.blockSignature = blockSignature;
     }
 
-    public int getConsensusInstance() {
-        return consensusInstance;
-    }
-
-    public void setConsensusInstance(int consensusInstance) {
-        this.consensusInstance = consensusInstance;
-    }
-
-    public int getRound() {
-        return round;
-    }
-
-    public void setRound(int round) {
-        this.round = round;
+    public void setBlockSignature(String blockSignature) {
+        this.blockSignature = blockSignature;
     }
 
     public String getBlockSignature() {
         return blockSignature;
     }
 
-    public void setBlockSignature(String blockSignature) {
-        this.blockSignature = blockSignature;
+    public String toJson() {
+        return new Gson().toJson(this);
     }
 }
