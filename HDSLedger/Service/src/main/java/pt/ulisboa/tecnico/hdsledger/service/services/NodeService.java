@@ -3,11 +3,15 @@ package pt.ulisboa.tecnico.hdsledger.service.services;
 import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 import pt.ulisboa.tecnico.hdsledger.service.models.InstanceInfo;
 import pt.ulisboa.tecnico.hdsledger.service.models.MessageBucket;
+import pt.ulisboa.tecnico.hdsledger.service.models.Ledger;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.communication.PrePrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestBalance;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestCreate;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
@@ -15,8 +19,10 @@ import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
 import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Optional;
 
@@ -24,8 +30,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import java.util.logging.Level;
-
-import com.google.gson.Gson;
 
 public class NodeService implements UDPService {
 
@@ -43,6 +47,7 @@ public class NodeService implements UDPService {
 
     // Blockchain
     private final Map<Integer, Block> blockchain = new ConcurrentHashMap<>();
+    private final Ledger ledger = new Ledger();
 
     private ProcessConfig leaderConfig;
 
@@ -55,8 +60,7 @@ public class NodeService implements UDPService {
     private final MessageBucket commitMessages;
 
     public NodeService(ProcessConfig[] clientsConfig, ProcessConfig config, PerfectLink link,
-            ProcessConfig leaderConfig,
-            int nodesLength) {
+            ProcessConfig leaderConfig, int nodesLength) {
         this.clientsConfig = clientsConfig;
         this.config = config;
         this.link = link;
@@ -65,8 +69,52 @@ public class NodeService implements UDPService {
         this.commitMessages = new MessageBucket(nodesLength);
     }
 
-    public void addBlock(int instance, Block block) {
-        this.blockchain.put(instance, block);
+    public boolean tryAddBlock(int instance, Block block) {
+        List<LedgerRequest> nonCreateRequests = new ArrayList<>();
+        for (LedgerRequest request : block.getRequests()) {
+            if (request.getType() != LedgerRequest.Type.CREATE) {
+                nonCreateRequests.add(request);
+            }
+            else {
+                LedgerRequestCreate create = request.deserializeCreate();
+                if (!this.ledger.createAccount(create))
+                return false;
+            }
+        }
+        
+        boolean isValid = true;
+        List<LedgerRequestTransfer> appliedTransfers = new ArrayList<>();
+        for (LedgerRequest request : nonCreateRequests) {
+            switch (request.getType()) {
+                case TRANSFER -> {
+                    LedgerRequestTransfer transfer = request.deserializeTransfer();
+                    if (!this.ledger.transfer(transfer))
+                        isValid = false;
+                    else
+                        appliedTransfers.add(transfer);
+                }
+                case BALANCE -> {
+                    LedgerRequestBalance balance = request.deserializeBalance();
+                    // TODO
+                }
+                default -> {
+                    // Should never happen
+                    LOGGER.log(Level.INFO, "Invalid request type");
+                    isValid = false;
+                }
+            }
+            if (!isValid)
+                break;
+        }
+        if (isValid) {
+            this.blockchain.put(instance, block);
+            return true;
+        }
+        ListIterator<LedgerRequestTransfer> li = appliedTransfers.listIterator(appliedTransfers.size());
+        while (li.hasPrevious()) {
+            this.ledger.revertTransfer(li.previous());
+        }
+        return false;
     }
 
     public int getConsensusInstance() {
@@ -267,7 +315,7 @@ public class NodeService implements UDPService {
         // Verify if block was signed by leader
         // Assumption: private keys not leaked
         if (!(checkIfSignedByLeader(prepareMessage.getBlock(), prepareMessage.getLeaderSignature(), errorLog)
-                && verifyTransactions(block.getRequests(), senderId)))
+           && verifyTransactions(block.getRequests(), senderId)))
             return;
 
         // Doesnt add duplicate messages
@@ -303,7 +351,7 @@ public class NodeService implements UDPService {
 
             // Send commit messages to all nodes that sent prepare messages for this
             // instance and round (acknowledging that they have received the prepare)
-            prepareMessages.getMessages(consensusInstance, round);          
+            prepareMessages.getMessages(consensusInstance, round);
         }
     }
 
@@ -372,12 +420,12 @@ public class NodeService implements UDPService {
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
-            this.addBlock(consensusInstance, Block.fromJson(committedBlock.get()));
+            boolean successfulAdd = this.tryAddBlock(consensusInstance, Block.fromJson(committedBlock.get()));
 
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
-                            "{0} - Decided on Consensus Instance {1}, Round {2}",
-                            config.getId(), consensusInstance, round));
+                            "{0} - Decided on Consensus Instance {1}, Round {2}, Successful Add? {3}",
+                            config.getId(), consensusInstance, round, successfulAdd));
         }
     }
 
