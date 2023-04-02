@@ -1,4 +1,4 @@
-package pt.ulisboa.tecnico.hdsledger.ledger;
+package pt.ulisboa.tecnico.hdsledger.service.models;
 
 import java.math.BigDecimal;
 import java.security.PublicKey;
@@ -22,7 +22,7 @@ public class Account {
     }
 
     public boolean addBalance(BigDecimal amount) {
-        syncronized (this.balance) {
+        synchronized (this.balance) {
             if (amount.compareTo(BigDecimal.ZERO) < 0) {
                 return false;
             }
@@ -32,7 +32,7 @@ public class Account {
     }
 
     public boolean subtractBalance(BigDecimal amount) {
-        syncronized (this.balance) {
+        synchronized (this.balance) {
             if (amount.compareTo(BigDecimal.ZERO) < 0 || this.balance.compareTo(amount) < 0) {
                 return false;
             }

@@ -2,23 +2,24 @@ package pt.ulisboa.tecnico.hdsledger.service.models;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.List;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.text.MessageFormat;
 
+import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
-import pt.ulisboa.tecnico.hdsledger.ledger.Block;
 
 public class MessageBucket {
 
     private static final CustomLogger LOGGER = new CustomLogger(MessageBucket.class.getName());
     // Quorum size
     private final int quorumSize;
-    // Map of consensus instance to round to messages
-    private final Map<Integer, Map<Integer, List<NodeMessage>>> bucket = new ConcurrentHashMap<>();
+    // Instance -> Round -> Sender ID -> Consensus message
+    private final Map<Integer, Map<Integer, Map<String, ConsensusMessage>>> bucket = new ConcurrentHashMap<>();
 
     public MessageBucket(int nodeCount) {
         int f = Math.floorDiv(nodeCount - 1, 3);
@@ -32,29 +33,21 @@ public class MessageBucket {
      * 
      * @param message
      */
-    public void addMessage(NodeMessage message) {
+    public void addMessage(ConsensusMessage message) {
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
 
         bucket.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
-        bucket.get(consensusInstance).putIfAbsent(round, new ArrayList<>());
-        bucket.get(consensusInstance).get(round).add(message);
+        bucket.get(consensusInstance).putIfAbsent(round, new ConcurrentHashMap<>());
+        bucket.get(consensusInstance).get(round).put(message.getSenderId(), message);
     }
 
-    /*
-     * A quorum of valid messages is a set of floor[(n+f)/2] + 1 messages that agree
-     * on the same consensus instance, round and value.
-     * 
-     * @param instance
-     * 
-     * @param round
-     */
-    public Optional<Block> hasValidQuorum(String nodeId, int instance, int round) {
-
+    public Optional<Block> hasValidPrepareQuorum(String nodeId, int instance, int round) {
         // Create mapping of value to frequency
         HashMap<Block, Integer> frequency = new HashMap<Block, Integer>();
-        bucket.get(instance).get(round).forEach((message) -> {
-            Block block = message.getBlock();
+        bucket.get(instance).get(round).values().forEach((message) -> {
+            PrepareMessage prepareMessage = message.deserializePrepareMessage();
+            Block block = Block.fromJson(prepareMessage.getBlock());
             frequency.put(block, frequency.getOrDefault(block, 0) + 1);
         });
 
@@ -68,28 +61,56 @@ public class MessageBucket {
     }
 
     /*
-     * Verify if all received messages have the same value
-     * Report if they don't
      * 
-     * @param value The quorum value
-     * 
-     * @param instance The consensus instance
-     * 
-     * @param round The round
      */
-    public void verifyReceivedMessages(Block block, int instance, int round) {
-        bucket.get(instance).get(round).forEach((message) -> {
-            if (!message.getBlock().equals(block))
+    public Optional<String> hasValidCommitQuorum(String nodeId, int instance, int round) {
+        // Create mapping of value to frequency
+        HashMap<String, Integer> frequency = new HashMap<String, Integer>();
+        bucket.get(instance).get(round).values().forEach((message) -> {
+            CommitMessage commitMessage = message.deserializeCommitMessage();
+            String signature = commitMessage.getBlockSignature();
+            frequency.put(signature, frequency.getOrDefault(signature, 0) + 1);
+        });
+
+        // Only one value (if any, thus the optional) will have a frequency
+        // greater than or equal to the quorum size
+
+        return frequency.entrySet().stream().filter((Map.Entry<String, Integer> entry) -> {
+            return entry.getValue() >= quorumSize;
+        }).map((Map.Entry<String, Integer> entry) -> {
+            return entry.getKey();
+        }).findFirst();
+    }
+
+    public void verifyReceivedPrepareMessage(Block block, int instance, int round) {
+        bucket.get(instance).get(round).values().forEach((message) -> {
+            PrepareMessage prepareMessage = message.deserializePrepareMessage();
+            Block receivedBlock = Block.fromJson(prepareMessage.getBlock());
+            if (!receivedBlock.equals(block))
                 LOGGER.log(Level.INFO, MessageFormat.format(
-                        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                                + "@      WARNING: DIFFERENT VALUES RECEIVED!      @\n"
+                                  "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "@  WARNING: DIFFERENT PREPARE VALUES RECEIVED!  @\n"
                                 + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
                                 + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
                         message.getSenderId()));
         });
     }
 
-    public List<NodeMessage> getMessages(int instance, int round) {
-        return bucket.get(instance).get(round);
+    public void verifyReceivedCommitMessage(String signature, int instance, int round) {
+        bucket.get(instance).get(round).values().forEach((message) -> {
+            CommitMessage commitMessage = message.deserializeCommitMessage();
+            String receivedSignature = commitMessage.getBlockSignature();
+            if (!receivedSignature.equals(signature))
+                LOGGER.log(Level.INFO, MessageFormat.format(
+                         "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "@  WARNING: DIFFERENT COMMIT VALUES RECEIVED!  @\n"
+                                + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                        message.getSenderId()));
+        });
+    }
+
+    public Collection<ConsensusMessage> getMessages(int instance, int round) {
+        return bucket.get(instance).get(round).values();
     }
 }

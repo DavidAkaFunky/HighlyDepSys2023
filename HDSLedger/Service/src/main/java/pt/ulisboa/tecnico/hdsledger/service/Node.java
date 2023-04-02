@@ -6,7 +6,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
-import pt.ulisboa.tecnico.hdsledger.service.models.NodeMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
 import pt.ulisboa.tecnico.hdsledger.service.services.LedgerService;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
@@ -31,7 +31,7 @@ public class Node {
             int blockSize = Integer.parseInt(args[2]);
 
             ProcessConfig[] otherNodes = new ProcessConfigBuilder().fromFile(nodesConfigPath);
-            String leaderId = Arrays.stream(otherNodes).filter(ProcessConfig::isLeader).findAny().get().getId();
+            ProcessConfig leaderConfig = Arrays.stream(otherNodes).filter(ProcessConfig::isLeader).findAny().get();
 
             Optional<ProcessConfig> node = Arrays.stream(otherNodes).filter(nodeConfig -> nodeConfig.getId().equals(id))
                     .findAny();
@@ -53,12 +53,12 @@ public class Node {
             ProcessConfig[] clients = new ProcessConfigBuilder().fromFile(clientsConfigPath);
 
             // Abstraction to send and receive messages
-            PerfectLink linkToNodes = new PerfectLink(nodeConfig, nodeConfig.getPort(), otherNodes, NodeMessage.class);
+            PerfectLink linkToNodes = new PerfectLink(nodeConfig, nodeConfig.getPort(), otherNodes, ConsensusMessage.class);
             PerfectLink linkToClients = new PerfectLink(nodeConfig, nodeConfig.getClientPort(), clients,
                     LedgerRequest.class);
 
             // Services that implement listen from UDPService
-            NodeService nodeService = new NodeService(clients, nodeConfig, linkToNodes, leaderId, otherNodes.length);
+            NodeService nodeService = new NodeService(clients, nodeConfig, linkToNodes, leaderConfig, otherNodes.length);
             LedgerService ledgerService = new LedgerService(clients, id, nodeService, linkToClients, blockSize);
 
             nodeService.listen();

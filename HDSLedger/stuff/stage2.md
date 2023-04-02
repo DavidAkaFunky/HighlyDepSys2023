@@ -17,7 +17,7 @@ SOLUTION
   C->L    L->PP     PP->P       P->C         C->L
 
     1       n-1     (n-1)(n-1)  n^2-n         1   
-                                n^2-n acks    1 ack
+                                n^2-n acks    1 ack 
                                 
     f+1  (porque lider bizatino)              f+1 ou 2f+1  (porque lider bizantino)
                                               2f+1 acks se 2f+1
@@ -45,6 +45,14 @@ SOLUTION
     - objetivo usar menos assinaturas
     - no report: ser claro nas assinaturas (o porque de assinar X )
     - apos o prepare o valor do cliente ja foi propagado de forma segura, ja podemos p.ex enviar mensagens de commit com a instancia/round em vez de ter o valor do cliente
+
+    COMO RESOLVER SOFT READ
+
+    Assina que a conta mudou o seu saldo
+    Ao enviar a a mensagem de commit processar qual o saldo final de cada conta e assinamos a conta
+    Ao receber a mensagem de commit, guardar estas assinaturas 
+    no entanto é preciso confirmar que um no bizantino nao submeteu uma assinatura para um balanco falso
+
 
 
 

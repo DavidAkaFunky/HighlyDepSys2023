@@ -6,6 +6,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
+import pt.ulisboa.tecnico.hdsledger.service.models.Account;
 import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
@@ -40,8 +41,8 @@ public class LedgerService implements UDPService {
     private final PerfectLink link;
     // Thread to run service
     private Thread thread;
-    // Blockchain
-    private final Map<Integer, Block> blockchain = new ConcurrentHashMap<>();
+    // Accounts
+    private final Map<String, Account> accounts = new ConcurrentHashMap<>();
     // Map of unconfirmed transactions
     private final Queue<LedgerRequest> mempool = new ConcurrentLinkedQueue<LedgerRequest>();
     // Block size

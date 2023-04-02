@@ -16,7 +16,6 @@ import java.net.SocketException;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
-import java.util.UUID;
 import java.util.Map.Entry;
 
 import com.google.gson.Gson;
@@ -155,10 +153,10 @@ public class PerfectLink {
      */
     // TODO: Fix me, cant have node message here because of circular dependency
     /*
-    public void badBroadcast(NodeMessage data) {
+    public void badBroadcast(ConsensusMessage data) {
         Gson gson = new Gson();
         nodes.forEach((destId, dest) -> {
-            NodeMessage badData = gson.fromJson(gson.toJson(data), data.getClass());
+            ConsensusMessage badData = gson.fromJson(gson.toJson(data), data.getClass());
             List<String> args = badData.getArgs();
             args.set(args.size() - 1, "BYZANTINE_VALUE_" + UUID.randomUUID().toString().replace("_", ""));
             badData.setArgs(args);
@@ -211,7 +209,7 @@ public class PerfectLink {
                     sleepTime <<= 1;
                 }
 
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - NodeMessage {1} sent to {2}:{3} successfully",
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - ConsensusMessage {1} sent to {2}:{3} successfully",
                         config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
@@ -313,9 +311,9 @@ public class PerfectLink {
         }
 
         if (message.getType().equals(Message.Type.PREPARE) || message.getType().equals(Message.Type.COMMIT)){
-            NodeMessage nodeMessage = (NodeMessage) message;
-            if (nodeMessage.getReplyTo() != null && nodeMessage.getReplyTo().equals(config.getId())){
-                receivedAcks.add(nodeMessage.getReplyToMessageId());
+            ConsensusMessage consensusMessage = (ConsensusMessage) message;
+            if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId())){
+                receivedAcks.add(consensusMessage.getReplyToMessageId());
             }
             return message;
         }

@@ -1,7 +1,9 @@
-package pt.ulisboa.tecnico.hdsledger.ledger;
+package pt.ulisboa.tecnico.hdsledger.service.models;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import com.google.gson.Gson;
 
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 
@@ -40,9 +42,17 @@ public class Block {
 		return consensusInstance + requests.toString();
 	}
 
+    public String toJson() {
+        return new Gson().toJson(this);
+    }
+
+    public static Block fromJson(String json) {
+        return new Gson().fromJson(json, Block.class);
+    }
+
     @Override
     public String toString() {
-        return "Block [consensusInstance=" + consensusInstance + ", requests=" + requests + "]";
+        return this.toJson();
     }
 
     @Override
