@@ -1,34 +1,18 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
-import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
-import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
-import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
+import com.google.gson.Gson;
+import pt.ulisboa.tecnico.hdsledger.utilities.*;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig.ByzantineBehavior;
 
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.UnknownHostException;
-import java.net.SocketException;
+import java.net.*;
 import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
+import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
-import java.util.Map.Entry;
-
-import com.google.gson.Gson;
 
 public class PerfectLink {
 
@@ -41,23 +25,23 @@ public class PerfectLink {
     private final Map<String, ProcessConfig> nodes = new ConcurrentHashMap<>();
     // Number of maximum byzantine nodes
     private final int maxByzantineNodeCount;
-    // Set of received messages from specific node (prevent duplicates)
-    private Map<String, Set<Integer>> receivedMessages = new ConcurrentHashMap<>();
-    // Set of received ACKs from specific node
-    private Set<Integer> receivedAcks = ConcurrentHashMap.newKeySet();
-    // Message counter
-    private AtomicInteger messageCounter = new AtomicInteger(0);
     // Reference to the node itself
     private final ProcessConfig config;
     // Class to deserialize messages to
     private final Class<? extends Message> messageClass;
+    // Set of received messages from specific node (prevent duplicates)
+    private final Map<String, Set<Integer>> receivedMessages = new ConcurrentHashMap<>();
+    // Set of received ACKs from specific node
+    private final Set<Integer> receivedAcks = ConcurrentHashMap.newKeySet();
+    // Message counter
+    private final AtomicInteger messageCounter = new AtomicInteger(0);
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
         this(self, port, nodes, messageClass, true);
     }
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
-            boolean activateLogs) {
+                       boolean activateLogs) {
 
         this.config = self;
         this.messageClass = messageClass;
@@ -91,7 +75,7 @@ public class PerfectLink {
 
     /*
      * Multicast to f+1 nodes in the network
-     * 
+     *
      * @param data The message to be broadcasted
      */
     public void smallQuorumMulticast(Message data) {
@@ -100,7 +84,7 @@ public class PerfectLink {
 
     /*
      * Multicast to 2f+1 nodes in the network
-     * 
+     *
      * @param data The message to be broadcasted
      */
     public void quorumMulticast(Message data) {
@@ -111,7 +95,7 @@ public class PerfectLink {
      * Multicast a message to N nodes in the network
      *
      * @param data The message to be broadcasted
-     * 
+     *
      * @param n The number of nodes to send the message to
      */
     public void multicast(Message data, int n) {
@@ -148,7 +132,7 @@ public class PerfectLink {
      * BYZANTINE_TESTS
      * Broadcast a different value for each node in the network
      * Used to test resiliency to Byzantine behavior
-     * 
+     *
      * @param data The message to be broadcasted
      */
     // TODO: Fix me, cant have node message here because of circular dependency
@@ -191,7 +175,7 @@ public class PerfectLink {
                 int messageId = data.getMessageId();
                 int sleepTime = BASE_SLEEP_TIME;
 
-                for (;;) {
+                for (; ; ) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
                             data.getType(), destAddress, destPort, messageId, count++));
@@ -276,7 +260,7 @@ public class PerfectLink {
         // Any byzantine node will not verify signatures
         if (config.getByzantineBehavior() == ByzantineBehavior.NONE
                 && !RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
-                        nodes.get(message.getSenderId()).getPublicKeyPath())) {
+                nodes.get(message.getSenderId()).getPublicKeyPath())) {
             message.setType(Message.Type.IGNORE);
 
             LOGGER.log(Level.INFO, MessageFormat.format(
@@ -303,16 +287,16 @@ public class PerfectLink {
         }
 
         // It's not an ACK -> Deserialize for the correct type
-        message = new Gson().fromJson(responseData.getMessage(), messageClass);
+        message = new Gson().fromJson(responseData.getMessage(), this.messageClass);
 
         // Message already received (add returns false if already exists) => Discard
         if (!receivedMessages.get(message.getSenderId()).add(messageId)) {
             message.setType(Message.Type.IGNORE);
         }
 
-        if (message.getType().equals(Message.Type.PREPARE) || message.getType().equals(Message.Type.COMMIT)){
+        if (message.getType().equals(Message.Type.PREPARE) || message.getType().equals(Message.Type.COMMIT)) {
             ConsensusMessage consensusMessage = (ConsensusMessage) message;
-            if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId())){
+            if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId())) {
                 receivedAcks.add(consensusMessage.getReplyToMessageId());
             }
             return message;
