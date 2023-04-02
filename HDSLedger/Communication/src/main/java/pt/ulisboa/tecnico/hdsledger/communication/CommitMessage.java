@@ -1,22 +1,34 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import java.util.List;
+
 import com.google.gson.Gson;
 
 public class CommitMessage {
 
-    // (Replica) Signature of the block
-    private String blockSignature;
+    // True if the prepared block is valid
+    private boolean validBlock;
+    // List of signatures for updated accounts
+    private List<String> updateAccountSignatures;
 
-    public CommitMessage(String blockSignature) {
-        this.blockSignature = blockSignature;
+    public CommitMessage(boolean validBlock) {
+        this.validBlock = validBlock;
     }
 
-    public void setBlockSignature(String blockSignature) {
-        this.blockSignature = blockSignature;
+    public void setUpdateAccountSignatures(List<String> updateAccountSignatures) {
+        this.updateAccountSignatures = updateAccountSignatures;
     }
 
-    public String getBlockSignature() {
-        return blockSignature;
+    public List<String> getUpdateAccountSignatures() {
+        return updateAccountSignatures;
+    }
+
+    public boolean isValidBlock() {
+        return validBlock;
+    }
+
+    public void setValidBlock(boolean validBlock) {
+        this.validBlock = validBlock;
     }
 
     public String toJson() {
