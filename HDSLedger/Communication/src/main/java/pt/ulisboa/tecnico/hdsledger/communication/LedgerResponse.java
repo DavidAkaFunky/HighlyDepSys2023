@@ -1,44 +1,31 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
-import java.util.List;
+import java.util.Map;
+
+import com.google.gson.Gson;
 
 public class LedgerResponse extends Message {
     
     // Consensus instance when value was decided
-    private int consensusInstance;
-    // Message Identifier
-    private int nonce;
-    // New blockchain values
-    private List<String> values;
+    private UpdateAccount updateAccount;
+    // Signatures of the account update
+    private Map<String, String> signatures;
 
-    public LedgerResponse(String senderId, int nonce, int consensusInstance, List<String> values) {
+    public LedgerResponse(String senderId, UpdateAccount updateAccount, Map<String, String> signatures) {
         super(senderId, Type.REPLY);
-        this.nonce = nonce;
-        this.consensusInstance = consensusInstance;
-        this.values = values;
+        this.updateAccount = updateAccount;
+        this.signatures = signatures;
     }
 
-    public List<String> getValues() {
-        return values;
+    public UpdateAccount getUpdateAccount() {
+        return updateAccount;
     }
 
-    public void setValues(List<String> values) {
-        this.values = values;
+    public Map<String, String> getSignatures() {
+        return signatures;
     }
 
-    public int getConsensusInstance() {
-        return consensusInstance;
-    }
-
-    public void setConsensusInstance(int consensusInstance) {
-        this.consensusInstance = consensusInstance;
-    }
-    
-    public int getNonce(){
-        return nonce;
-    }
-
-    public void setNonce(int nonce) {
-        this.nonce = nonce;
+    public String toJson() {
+        return new Gson().toJson(this);
     }
 }

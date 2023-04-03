@@ -1,8 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestCreate;
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
@@ -20,10 +18,8 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Queue;
 import java.util.Optional;
-import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;

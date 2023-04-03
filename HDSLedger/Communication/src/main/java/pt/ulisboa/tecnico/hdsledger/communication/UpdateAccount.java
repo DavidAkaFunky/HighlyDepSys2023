@@ -19,6 +19,10 @@ public class UpdateAccount {
         this.consensusInstance = consensusInstance;
     }
 
+    public BigDecimal getUpdatedBalance() {
+        return balance;
+    }
+
     public String toJson() {
         return new Gson().toJson(this);
     }

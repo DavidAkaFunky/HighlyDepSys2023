@@ -2,21 +2,31 @@ package pt.ulisboa.tecnico.hdsledger.service.models;
 
 import java.math.BigDecimal;
 
+import pt.ulisboa.tecnico.hdsledger.communication.UpdateAccount;
+
 public class Account {
 
+    // Account owner
+    private String ownerId;
     // Account identifier
     private String publicKeyHash;
     // Most recent consensus instance that updated balance
-    private int mostRecentConsensusInstance;
+    private UpdateAccount mostRecentUpdateAccount;
+    // Update account signature
+    private String updateAccountSignature;
     // Account balance
     private BigDecimal balance;
     // Initial balance
     private static final int INITIAL_BALANCE = 100;
 
-    public Account(int consensusInstance, String publicKeyHash) {
-        this.mostRecentConsensusInstance = consensusInstance;
+    public Account(String ownerId, String publicKeyHash) {
+        this.ownerId = ownerId;
         this.publicKeyHash = publicKeyHash;
         this.balance = new BigDecimal(INITIAL_BALANCE);
+    }
+
+    public String getOwnerId() {
+        return ownerId;
     }
 
     public String getPublicKeyHash() {
@@ -31,34 +41,22 @@ public class Account {
         return balance;
     }
 
-    public void addBalance(int consensusInstance, BigDecimal amount) {
-        synchronized (this) {
-            setMostRecentConsensusInstance(consensusInstance);
-            this.balance = this.balance.add(amount);
+    public void addBalance(BigDecimal amount) {
+        this.balance = this.balance.add(amount);
+    }
+
+    public boolean subtractBalance(BigDecimal amount) {
+        if (this.balance.compareTo(amount) < 0) {
+            return false;
         }
+        this.balance = this.balance.subtract(amount);
+        return true;
     }
 
-    public boolean subtractBalance(int nonce, BigDecimal amount) {
-        synchronized (this) {
-            setMostRecentConsensusInstance(nonce);
-            if (this.balance.compareTo(amount) < 0) {
-                return false;
-            }
-            this.balance = this.balance.subtract(amount);
-            return true;
-        }
-    }
-
-    public void setBalance(BigDecimal balance) {
-        this.balance = balance;
-    }
-
-    public int getMostRecentConsensusInstance() {
-        return mostRecentConsensusInstance;
-    }
-
-    public void setMostRecentConsensusInstance(int consensusInstance) {
-        this.mostRecentConsensusInstance = consensusInstance;
+    public void updateAccount(UpdateAccount updateAccount, String updateAccountSignature) {
+        this.mostRecentUpdateAccount = updateAccount;
+        this.updateAccountSignature = updateAccountSignature;
+        this.balance = updateAccount.getUpdatedBalance();
     }
 
 }

@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
 import java.util.List;
+import java.util.Map;
 
 import com.google.gson.Gson;
 
@@ -8,18 +9,18 @@ public class CommitMessage {
 
     // True if the prepared block is valid
     private boolean validBlock;
-    // List of signatures for updated accounts
-    private List<String> updateAccountSignatures;
+    // Map public key hash -> signature for updated account
+    private Map<String, String> updateAccountSignatures;
 
     public CommitMessage(boolean validBlock) {
         this.validBlock = validBlock;
     }
 
-    public void setUpdateAccountSignatures(List<String> updateAccountSignatures) {
+    public void setUpdateAccountSignatures(Map<String, String> updateAccountSignatures) {
         this.updateAccountSignatures = updateAccountSignatures;
     }
 
-    public List<String> getUpdateAccountSignatures() {
+    public Map<String, String> getUpdateAccountSignatures() {
         return updateAccountSignatures;
     }
 

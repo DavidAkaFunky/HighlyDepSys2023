@@ -63,23 +63,8 @@ public class MessageBucket {
     /*
      * 
      */
-    public Optional<String> hasValidCommitQuorum(String nodeId, int instance, int round) {
-        // Create mapping of value to frequency
-        HashMap<String, Integer> frequency = new HashMap<String, Integer>();
-        bucket.get(instance).get(round).values().forEach((message) -> {
-            CommitMessage commitMessage = message.deserializeCommitMessage();
-            String signature = commitMessage.getBlockSignature();
-            frequency.put(signature, frequency.getOrDefault(signature, 0) + 1);
-        });
-
-        // Only one value (if any, thus the optional) will have a frequency
-        // greater than or equal to the quorum size
-
-        return frequency.entrySet().stream().filter((Map.Entry<String, Integer> entry) -> {
-            return entry.getValue() >= quorumSize;
-        }).map((Map.Entry<String, Integer> entry) -> {
-            return entry.getKey();
-        }).findFirst();
+    public boolean hasValidCommitQuorum(String nodeId, int instance, int round) {
+        return bucket.get(instance).get(round).size() >= quorumSize;
     }
 
     public void verifyReceivedPrepareMessage(Block block, int instance, int round) {
@@ -96,21 +81,7 @@ public class MessageBucket {
         });
     }
 
-    public void verifyReceivedCommitMessage(String signature, int instance, int round) {
-        bucket.get(instance).get(round).values().forEach((message) -> {
-            CommitMessage commitMessage = message.deserializeCommitMessage();
-            String receivedSignature = commitMessage.getBlockSignature();
-            if (!receivedSignature.equals(signature))
-                LOGGER.log(Level.INFO, MessageFormat.format(
-                         "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                                + "@  WARNING: DIFFERENT COMMIT VALUES RECEIVED!  @\n"
-                                + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                                + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
-                        message.getSenderId()));
-        });
-    }
-
-    public Collection<ConsensusMessage> getMessages(int instance, int round) {
-        return bucket.get(instance).get(round).values();
+    public Map<String, ConsensusMessage> getMessages(int instance, int round) {
+        return bucket.get(instance).get(round);
     }
 }

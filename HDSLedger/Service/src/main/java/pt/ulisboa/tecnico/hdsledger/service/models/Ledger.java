@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestCreate;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
+import pt.ulisboa.tecnico.hdsledger.communication.UpdateAccount;
 
 public class Ledger {
 
@@ -24,10 +25,12 @@ public class Ledger {
     // accounts when the consensus is decided.
     private final Map<String, Account> temporaryAccounts = new ConcurrentHashMap<>();
 
+    private final Map<Integer, Map<String, UpdateAccount>> AccountUpdates = new ConcurrentHashMap<>();
+
     public Ledger() {
     }
 
-    public Optional<Account> createAccount(int consensusInstance, LedgerRequestCreate request) {
+    public Optional<Account> createAccount(int consensusInstance, String senderId, LedgerRequestCreate request) {
         PublicKey publicKey = request.getAccountPubKey();
         String publicKeyHash;
         try {
@@ -36,7 +39,7 @@ public class Ledger {
             return Optional.empty();
         }
         // Put returns null if the key was not present
-        Account acc = new Account(consensusInstance, publicKeyHash);
+        Account acc = new Account(senderId, publicKeyHash);
         if (temporaryAccounts.put(publicKeyHash, acc) == null){
             return Optional.of(acc);
         }
@@ -70,10 +73,10 @@ public class Ledger {
         }
         Account srcAccount = temporaryAccounts.get(srcHash);
         Account destAccount = temporaryAccounts.get(destHash);
-        if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(consensusInstance, amount)) {
+        if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(amount)) {
             return new ArrayList<Account>();
         }
-        destAccount.addBalance(consensusInstance, amount);
+        destAccount.addBalance(amount);
         List<Account> accounts = new ArrayList<Account>();
         accounts.add(srcAccount);
         accounts.add(destAccount);
@@ -90,28 +93,36 @@ public class Ledger {
             return;
         }
         BigDecimal amount = request.getAmount();
-        Account srcAccount = accounts.get(srcHash);
         Account tmpSrcAccount = temporaryAccounts.get(srcHash);
-        Account destAccount = accounts.get(destHash);
         Account tmpDestAccount = temporaryAccounts.get(destHash);
 
         // No need to check if accounts exist or if the balance is enough,
         // since the transfer was already successful
 
-        tmpSrcAccount.addBalance(srcAccount.getMostRecentConsensusInstance(), amount);
-        tmpDestAccount.subtractBalance(destAccount.getMostRecentConsensusInstance(), amount);
+        tmpSrcAccount.addBalance(amount);
+        tmpDestAccount.subtractBalance(amount);
     }
 
-    public void commitTransactions() {
+    public void commitTransactions(int consensusInstance) {
         temporaryAccounts.forEach((pubKeyHash, tmpAcc) -> {
-            accounts.putIfAbsent(pubKeyHash, new Account(tmpAcc.getMostRecentConsensusInstance(), pubKeyHash));
+            UpdateAccount update = AccountUpdates.get(consensusInstance).get(pubKeyHash);
+            accounts.putIfAbsent(pubKeyHash, new Account(tmpAcc.getOwnerId(), pubKeyHash));
             Account acc = accounts.get(pubKeyHash);
-            acc.setBalance(tmpAcc.getBalance());
+            acc.updateAccount(update, pubKeyHash);
         });
     }
 
     public Account getAccount(String publicKeyHash) {
         return accounts.get(publicKeyHash);
+    }
+
+    public void addAccountUpdate(int consensusInstance, String publicKeyHash, UpdateAccount updateAccount) {
+        AccountUpdates.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
+        AccountUpdates.get(consensusInstance).put(publicKeyHash, updateAccount);
+    }
+
+    public Map<String, UpdateAccount> getAccountUpdates(int consensusInstance) {
+        return AccountUpdates.get(consensusInstance);
     }
 
 }
