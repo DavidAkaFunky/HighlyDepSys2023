@@ -26,4 +26,12 @@ public class UpdateAccount {
     public String toJson() {
         return new Gson().toJson(this);
     }
+
+    public String getHashPubKey() {
+        return hashPubKey;
+    }
+
+    public Integer getConsensusInstance() {
+        return consensusInstance;
+    }
 }

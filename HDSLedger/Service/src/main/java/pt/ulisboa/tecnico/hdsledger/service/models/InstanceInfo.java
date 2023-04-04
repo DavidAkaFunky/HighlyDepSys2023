@@ -1,10 +1,14 @@
 package pt.ulisboa.tecnico.hdsledger.service.models;
 
+
+import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
+
 public class InstanceInfo {
 
     private int currentRound = 1;
     private int preparedRound = -1;
     private Block preparedBlock;
+    private CommitMessage commitMessage;
     private Block inputBlock;
     private int committedRound = -1;
 
@@ -50,5 +54,13 @@ public class InstanceInfo {
 
     public void setCommittedRound(int committedRound) {
         this.committedRound = committedRound;
+    }
+
+    public CommitMessage getCommitMessage() {
+        return commitMessage;
+    }
+
+    public void setCommitMessage(CommitMessage commitMessage) {
+        this.commitMessage = commitMessage;
     }
 }

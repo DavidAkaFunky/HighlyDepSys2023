@@ -12,14 +12,11 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
-import java.security.NoSuchAlgorithmException;
-import java.security.PublicKey;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
-import java.util.stream.Collectors;
 
 public class NodeService implements UDPService {
 
@@ -86,7 +83,8 @@ public class NodeService implements UDPService {
         List<LedgerRequestTransfer> appliedTransfers = new ArrayList<>();
         for (LedgerRequest request : requests) {
             switch (request.getType()) {
-                case CREATE -> { /* Already processed */ }
+                case CREATE -> {
+                    /* Already processed */ }
                 case TRANSFER -> {
                     LedgerRequestTransfer transfer = request.deserializeTransfer();
                     List<Account> accounts = this.ledger.transfer(instance, transfer);
@@ -309,7 +307,8 @@ public class NodeService implements UDPService {
                         "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}, Block {4}",
                         config.getId(), senderId, consensusInstance, round, block));
 
-        String errorLog = MessageFormat.format("  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+        String errorLog = MessageFormat.format(
+                  "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
                 + "  @       WARNING: PREPARE FROM NON LEADER!       @\n"
                 + "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
                 + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!", senderId);
@@ -338,22 +337,16 @@ public class NodeService implements UDPService {
                             "{0} - Already received PREPARE message for Consensus Instance {1}, Round {2}, "
                                     + "replying again to make sure it reaches the initial sender",
                             config.getId(), consensusInstance, round));
+                            
+            ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
+                .setConsensusInstance(consensusInstance)
+                .setRound(round)
+                .setReplyTo(senderId)
+                .setReplyToMessageId(message.getMessageId())
+                .setMessage(instance.getCommitMessage().toJson())
+                .build();
 
-            /*
-             * ConsensusMessage commitMessage = new ConsensusMessageBuilder(config.getId(),
-             * Message.Type.COMMIT)
-             * .setConsensusInstance(consensusInstance)
-             * .setRound(round)
-             * .setReplyTo(senderId)
-             * .setReplyToMessageId(senderMessageId)
-             * .setMessage(new CommitMessage(blockSignature).toJson())
-             * .build();
-             * 
-             * link.send(senderId, commitMessage);
-             */
-            // TODO: Como responder neste caso ?
-            // temos de enviar as assinaturas e dizer que o bloco foi valido ou nao
-            // conseguimos descobrir isso ? precisamos de calcular denovo ?
+                link.send(senderId, m);
         }
 
         // Find block with valid quorum
@@ -374,16 +367,18 @@ public class NodeService implements UDPService {
                 // Reply to every prepare message sender with the information that the block
                 // prepared is invalid
                 // and therefore no update account signatures will be sent
+
+                CommitMessage c = new CommitMessage(false);
+                instance.setCommitMessage(c);
+                
                 sendersMessage.stream().forEach(senderMessage -> {
                     ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
-                            .setConsensusInstance(consensusInstance)
-                            .setRound(round)
-                            .setReplyTo(senderMessage.getSenderId())
-                            .setReplyToMessageId(senderMessage.getMessageId())
-                            .build();
-
-                    CommitMessage c = new CommitMessage(false);
-                    m.setMessage(c.toJson());
+                    .setConsensusInstance(consensusInstance)
+                    .setRound(round)
+                    .setReplyTo(senderMessage.getSenderId())
+                    .setReplyToMessageId(senderMessage.getMessageId())
+                    .setMessage(c.toJson())
+                    .build();
 
                     link.send(senderMessage.getSenderId(), m);
                 });
@@ -407,6 +402,10 @@ public class NodeService implements UDPService {
                     this.ledger.addAccountUpdate(consensusInstance, account.getPublicKeyHash(), upAcc);
                 }
 
+                CommitMessage c = new CommitMessage(true);
+                c.setUpdateAccountSignatures(accountSignatures);
+                instance.setCommitMessage(c);
+
                 // Reply to every prepare message received with the signatures of the updated
                 // account
                 // This serves as proof that the update is valid (if a quorum of signatures is
@@ -417,11 +416,8 @@ public class NodeService implements UDPService {
                             .setRound(round)
                             .setReplyTo(senderMessage.getSenderId())
                             .setReplyToMessageId(senderMessage.getMessageId())
+                            .setMessage(c.toJson())
                             .build();
-
-                    CommitMessage c = new CommitMessage(true);
-                    c.setUpdateAccountSignatures(accountSignatures);
-                    m.setMessage(c.toJson());
 
                     link.send(senderMessage.getSenderId(), m);
                 });
@@ -508,25 +504,14 @@ public class NodeService implements UDPService {
             return;
         }
 
-        if (commitMessages.hasValidCommitQuorum(config.getId(), consensusInstance, round)
-                && instance.getCommittedRound() < round) {
+        Optional<Boolean> commitQuorum = commitMessages.hasValidCommitQuorum(config.getId(), consensusInstance, round);
+
+        if (commitQuorum.isPresent() && instance.getCommittedRound() < round) {
 
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
-            /*
-             * TODO
-             * responder aos clientes a dizer se correu bem
-             * if (successfulAdd) {
-             * broadcast do "Decide" com a minha (replica) assinatura sobre cada \
-             * balanco que foi alterado
-             * }
-             * Mensagem de Reply para cliente e mensagem de decide \
-             * (assinatura sobre instância de consenso + new balance para cada conta)
-             * (para maioria de assinaturas no soft read)
-             */
-
-            boolean successfulAdd = commitMessage.isValidBlock();
+            boolean successfulAdd = commitQuorum.get();
 
             if (successfulAdd) {
                 this.ledger.commitTransactions(consensusInstance);
@@ -543,7 +528,8 @@ public class NodeService implements UDPService {
 
                 accountUpdates.forEach((publicKeyHash, updateAccount) -> {
                     try {
-                        LedgerResponse response = new LedgerResponse(this.config.getId(), true, updateAccount, accountUpdateSignatures);
+                        LedgerResponse response = new LedgerResponse(this.config.getId(), true, updateAccount,
+                                accountUpdateSignatures);
                         this.link.send(this.ledger.getAccount(publicKeyHash).getOwnerId(), response);
                     } catch (Exception e) {
                         LOGGER.log(Level.INFO,
@@ -563,13 +549,13 @@ public class NodeService implements UDPService {
                                 this.link.send(id, response);
                             } catch (Exception e) {
                                 LOGGER.log(Level.INFO,
-                                        MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
+                                        MessageFormat.format(
+                                                "{0} - Error signing account update for consensus instance {1}",
                                                 config.getId(), consensusInstance));
                                 e.printStackTrace();
                             }
                         });
             }
-            
 
             lastDecidedConsensusInstance.getAndIncrement();
 

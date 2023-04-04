@@ -2,7 +2,6 @@ package pt.ulisboa.tecnico.hdsledger.service.models;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
@@ -63,8 +62,22 @@ public class MessageBucket {
     /*
      * 
      */
-    public boolean hasValidCommitQuorum(String nodeId, int instance, int round) {
-        return bucket.get(instance).get(round).size() >= quorumSize;
+    public Optional<Boolean> hasValidCommitQuorum(String nodeId, int instance, int round) {
+        // Create mapping of value to frequency
+        HashMap<Boolean, Integer> frequency = new HashMap<Boolean, Integer>();
+        bucket.get(instance).get(round).values().forEach((message) -> {
+            CommitMessage commitMessage = message.deserializeCommitMessage();
+            boolean valid = commitMessage.isValidBlock();
+            frequency.put(valid, frequency.getOrDefault(valid, 0) + 1);
+        });
+
+        // Only one value (if any, thus the optional) will have a frequency
+        // greater than or equal to the quorum size
+        return frequency.entrySet().stream().filter((Map.Entry<Boolean, Integer> entry) -> {
+            return entry.getValue() >= quorumSize;
+        }).map((Map.Entry<Boolean, Integer> entry) -> {
+            return entry.getKey();
+        }).findFirst();
     }
 
     public void verifyReceivedPrepareMessage(Block block, int instance, int round) {

@@ -8,7 +8,7 @@ public class LedgerResponse extends Message {
     
     // True if the prepared block is valid
     private boolean successful;
-    // Consensus instance when value was decided
+    //
     private UpdateAccount updateAccount;
     // Signatures of the account update
     private Map<String, Map<String, String>> signatures;
