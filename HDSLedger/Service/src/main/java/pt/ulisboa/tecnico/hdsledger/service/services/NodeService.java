@@ -362,8 +362,8 @@ public class NodeService implements UDPService {
 
             prepareMessages.verifyReceivedPrepareMessage(preparedBlock.get(), consensusInstance, round);
 
-            instance.setPreparedRound(round);
             instance.setPreparedBlock(preparedBlock.get());
+            instance.setPreparedRound(round);
 
             // Must reply to prepare message senders
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
