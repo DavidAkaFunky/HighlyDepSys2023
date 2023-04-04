@@ -12,6 +12,8 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -53,7 +55,7 @@ public class NodeService implements UDPService {
 
     public Set<Account> tryAddBlock(int instance, Block block) {
 
-        Set<Account> AccountUpdates = new HashSet<>();
+        Set<Account> accountUpdates = new HashSet<>();
 
         boolean isValid = true;
 
@@ -68,7 +70,7 @@ public class NodeService implements UDPService {
                     break;
                 } else {
                     appliedCreations.add(create);
-                    AccountUpdates.add(newAcc.get());
+                    accountUpdates.add(newAcc.get());
                 }
             }
         }
@@ -78,13 +80,13 @@ public class NodeService implements UDPService {
             while (li.hasPrevious()) {
                 this.ledger.revertCreateAccount(li.previous());
             }
+            return new HashSet<>();
         }
 
         List<LedgerRequestTransfer> appliedTransfers = new ArrayList<>();
         for (LedgerRequest request : requests) {
             switch (request.getType()) {
-                case CREATE -> {
-                    /* Already processed */}
+                case CREATE -> { /* Already processed */ }
                 case TRANSFER -> {
                     LedgerRequestTransfer transfer = request.deserializeTransfer();
                     List<Account> accounts = this.ledger.transfer(instance, transfer);
@@ -92,7 +94,7 @@ public class NodeService implements UDPService {
                         isValid = false;
                     else {
                         appliedTransfers.add(transfer);
-                        AccountUpdates.addAll(accounts);
+                        accountUpdates.addAll(accounts);
                     }
                 }
                 default -> {
@@ -106,7 +108,7 @@ public class NodeService implements UDPService {
         }
         if (isValid) {
             this.blockchain.put(instance, block);
-            return AccountUpdates;
+            return accountUpdates;
         }
         ListIterator<LedgerRequestTransfer> li = appliedTransfers.listIterator(appliedTransfers.size());
         while (li.hasPrevious()) {
@@ -367,8 +369,8 @@ public class NodeService implements UDPService {
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
             // Verify transactions validity and update temporary state
-            Set<Account> AccountUpdates = this.tryAddBlock(consensusInstance, preparedBlock.get());
-            if (AccountUpdates.size() == 0) {
+            Set<Account> accountUpdates = this.tryAddBlock(consensusInstance, preparedBlock.get());
+            if (accountUpdates.size() == 0) {
                 // Reply to every prepare message sender with the information that the block
                 // prepared is invalid
                 // and therefore no update account signatures will be sent
@@ -388,7 +390,7 @@ public class NodeService implements UDPService {
             } else {
                 // Sign account updates
                 Map<String, String> accountSignatures = new HashMap<>();
-                for (Account account : AccountUpdates) {
+                for (Account account : accountUpdates) {
                     String accountSignature;
                     UpdateAccount upAcc = new UpdateAccount(account.getPublicKeyHash(), account.getBalance(),
                             consensusInstance);
@@ -440,9 +442,9 @@ public class NodeService implements UDPService {
             return false;
         }
 
-        Map<String, UpdateAccount> AccountUpdates = this.ledger.getAccountUpdates(consensusInstance);
+        Map<String, UpdateAccount> accountUpdates = this.ledger.getAccountUpdates(consensusInstance);
 
-        if (AccountUpdates == null || AccountUpdates.size() != accountSignatures.size()) {
+        if (accountUpdates == null || accountUpdates.size() != accountSignatures.size()) {
             return false;
         }
 
@@ -450,7 +452,7 @@ public class NodeService implements UDPService {
             String publicKeyHash = entry.getKey();
             String signature = entry.getValue();
 
-            UpdateAccount AccountUpdate = AccountUpdates.get(publicKeyHash);
+            UpdateAccount AccountUpdate = accountUpdates.get(publicKeyHash);
 
             if (AccountUpdate == null || !RSAEncryption.verifySignature(AccountUpdate.toJson(), signature,
                     senderConfig.get().getPublicKeyPath())) {
@@ -528,30 +530,46 @@ public class NodeService implements UDPService {
 
             if (successfulAdd) {
                 this.ledger.commitTransactions(consensusInstance);
+
+                Map<String, UpdateAccount> accountUpdates = this.ledger.getAccountUpdates(consensusInstance);
+                Map<String, Map<String, String>> accountUpdateSignatures = new HashMap<>();
+
+                commitMessages.getMessages(consensusInstance, round).entrySet().stream().forEach(entry -> {
+                    String sender = entry.getKey();
+                    ConsensusMessage m = entry.getValue();
+                    CommitMessage c = m.deserializeCommitMessage();
+                    accountUpdateSignatures.put(sender, c.getUpdateAccountSignatures());
+                });
+
+                accountUpdates.forEach((publicKeyHash, updateAccount) -> {
+                    try {
+                        LedgerResponse response = new LedgerResponse(this.config.getId(), true, updateAccount, accountUpdateSignatures);
+                        this.link.send(this.ledger.getAccount(publicKeyHash).getOwnerId(), response);
+                    } catch (Exception e) {
+                        LOGGER.log(Level.INFO,
+                                MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
+                                        config.getId(), consensusInstance));
+                        e.printStackTrace();
+                    }
+                });
+            } else {
+                instance.getPreparedBlock()
+                        .getRequests()
+                        .stream()
+                        .map(request -> request.getSenderId())
+                        .forEach(id -> {
+                            try {
+                                LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd);
+                                this.link.send(id, response);
+                            } catch (Exception e) {
+                                LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
+                                                config.getId(), consensusInstance));
+                                e.printStackTrace();
+                            }
+                        });
             }
-
-            // TODO: What to send if not successful?
-
-            Map<String, UpdateAccount> AccountUpdates = this.ledger.getAccountUpdates(consensusInstance);
-            Map<String, String> accountUpdateSignatures = commitMessages.getMessages(consensusInstance, round)
-                    .entrySet()
-                    .stream()
-                    .collect(Collectors.toMap(
-                        Map.Entry::getKey, entry ->
-                            entry.getValue()
-                                 .deserializeCommitMessage().getUpdateAccountSignatures().get(config.getId())));
-
-            AccountUpdates.forEach((publicKeyHash, updateAccount) -> {
-                try {
-                    LedgerResponse response = new LedgerResponse(this.config.getId(), updateAccount, accountUpdateSignatures);
-                    this.link.send(this.ledger.getAccount(publicKeyHash).getOwnerId(), response);
-                } catch (Exception e) {
-                    LOGGER.log(Level.INFO,
-                            MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
-                                    config.getId(), consensusInstance));
-                    e.printStackTrace();
-                }
-            });
+            
 
             lastDecidedConsensusInstance.getAndIncrement();
 
