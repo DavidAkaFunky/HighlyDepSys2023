@@ -50,23 +50,31 @@ public class NodeService implements UDPService {
         this.commitMessages = new MessageBucket(nodesLength);
     }
 
-    // pubKey -> List<SignedAccount>
-    // TODO fix this (passar a Mapa: publicKey -> List[Nonce])
-    // TODO enviar isto no prepare
-    // TODO uponCommit if quorum -> responder a cada cliente List[Nonce]
-    public Map<String, List<Integer>> tryAddBlock(int instance, Block block) {
+    /*
+     * Checks if a block can be added to the blockchain
+     * 
+     * @param instance - Consensus instance
+     * 
+     * @param block - Block to validate
+     * 
+     * @return - Map signature -> account update it's signing or empty map if block
+     * is invalid
+     */
+    public Map<String, UpdateAccount> tryAddBlock(int instance, Block block) {
 
-        // publicKeyHash -> {nonces}
+        // Public key hash -> {nonces}
         Map<String, List<Integer>> nonces = new ConcurrentHashMap<>();
 
         boolean isValid = true;
 
         List<LedgerRequest> requests = block.getRequests();
+
+        // Process first all create account requests
         List<LedgerRequestCreate> appliedCreations = new ArrayList<>();
         for (LedgerRequest request : requests) {
             if (request.getType() == LedgerRequest.Type.CREATE) {
                 LedgerRequestCreate create = request.deserializeCreate();
-                Optional<Account> newAcc = this.ledger.createAccount(create);
+                Optional<Account> newAcc = this.ledger.createAccount(request.getSenderId(), create);
                 if (newAcc.isEmpty()) {
                     isValid = false;
                     break;
@@ -79,6 +87,7 @@ public class NodeService implements UDPService {
             }
         }
 
+        // Check if any failed
         if (!isValid) {
             ListIterator<LedgerRequestCreate> li = appliedCreations.listIterator(appliedCreations.size());
             while (li.hasPrevious())
@@ -86,6 +95,7 @@ public class NodeService implements UDPService {
             return new HashMap<>();
         }
 
+        // Process all transfer requests
         List<LedgerRequestTransfer> appliedTransfers = new ArrayList<>();
         for (LedgerRequest request : requests) {
             switch (request.getType()) {
@@ -98,10 +108,15 @@ public class NodeService implements UDPService {
                         isValid = false;
                     else {
                         appliedTransfers.add(transfer);
+
                         Account srcAccount = accounts.get(0);
-                        List<Integer> accountNonces = nonces.getOrDefault(srcAccount, new ArrayList<>());
-                        accountNonces.add(transfer.getNonce());
-                        nonces.put(srcAccount.getPublicKeyHash(), accountNonces);
+                        List<Integer> srcAccountNonces = nonces.getOrDefault(srcAccount, new ArrayList<>());
+                        srcAccountNonces.add(transfer.getNonce());
+                        nonces.put(srcAccount.getPublicKeyHash(), srcAccountNonces);
+
+                        Account destAccount = accounts.get(1);
+                        List<Integer> destAccountNonces = nonces.getOrDefault(destAccount, new ArrayList<>());
+                        nonces.put(destAccount.getPublicKeyHash(), destAccountNonces);
                     }
                 }
                 default -> {
@@ -113,36 +128,40 @@ public class NodeService implements UDPService {
             if (!isValid)
                 break;
         }
-        if (isValid) {
-            this.blockchain.put(instance, block);
-            // assinar e criar update accounts
-            List<String> accountUpdates = new ArrayList<>();
-            for (Map.Entry<String, List<Integer>> entry : nonces.entrySet()) {
-                Account account = this.ledger.getAccount(entry.getKey());
-                List<Integer> accountNonces = entry.getValue();
-                String accountSignature;
-                UpdateAccount upAcc = new UpdateAccount(account.getPublicKeyHash(), account.getBalance(),
-                        instance, accountNonces);
-                try {
-                    accountSignature = RSAEncryption.sign(upAcc.toJson(), this.config.getPrivateKeyPath());
-                } catch (Exception e) {
-                    LOGGER.log(Level.INFO,
-                            MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
-                                    config.getId(), consensusInstance));
-                    e.printStackTrace();
-                    return new HashMap<>();
-                }
-                accountUpdates.add(accountSignature);
-                this.ledger.addAccountUpdate(instance, account.getPublicKeyHash(), upAcc);
+
+        // Check if any failed
+        if (!isValid) {
+            ListIterator<LedgerRequestTransfer> li = appliedTransfers.listIterator(appliedTransfers.size());
+            while (li.hasPrevious())
+                this.ledger.revertTransfer(li.previous());
+            return new HashMap<>();
+        }
+
+        // Create account updates and sign them
+        HashMap<String, UpdateAccount> accountUpdates = new HashMap<>();
+
+        for (Map.Entry<String, List<Integer>> entry : nonces.entrySet()) {
+            Account account = this.ledger.getTemporaryAccount(entry.getKey());
+            List<Integer> accountNonces = entry.getValue();
+            String accountSignature;
+            UpdateAccount upAcc = new UpdateAccount(account.getOwnerId(), account.getPublicKeyHash(),
+                    account.getBalance(),
+                    instance, accountNonces);
+            try {
+                accountSignature = RSAEncryption.sign(upAcc.toJson(), this.config.getPrivateKeyPath());
+            } catch (Exception e) {
+                LOGGER.log(Level.INFO,
+                        MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
+                                config.getId(), consensusInstance));
+                e.printStackTrace();
+                return new HashMap<>();
             }
-            return nonces;
+
+            accountUpdates.put(accountSignature, upAcc);
+
+            this.ledger.addAccountUpdate(instance, account.getPublicKeyHash(), upAcc);
         }
-        ListIterator<LedgerRequestTransfer> li = appliedTransfers.listIterator(appliedTransfers.size());
-        while (li.hasPrevious()) {
-            this.ledger.revertTransfer(li.previous());
-        }
-        // assinar e criar update accounts
-        return new HashMap<>();
+        return accountUpdates;
     }
 
     /*
@@ -275,10 +294,11 @@ public class NodeService implements UDPService {
                         config.getId(), senderId, consensusInstance, round, block));
 
         String errorLog = MessageFormat.format(
-                  "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                + "  @     WARNING: PRE-PREPARE FROM NON LEADER!     @\n"
-                + "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!", senderId);
+                "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        + "  @     WARNING: PRE-PREPARE FROM NON LEADER!     @\n"
+                        + "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                senderId);
 
         // BYZANTINE_TESTS
         // Verify if block was signed by leader
@@ -336,10 +356,11 @@ public class NodeService implements UDPService {
                         config.getId(), senderId, consensusInstance, round, block));
 
         String errorLog = MessageFormat.format(
-                  "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                + "  @       WARNING: PREPARE FROM NON LEADER!       @\n"
-                + "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!", senderId);
+                "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        + "  @       WARNING: PREPARE FROM NON LEADER!       @\n"
+                        + "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                senderId);
 
         // BYZANTINE_TESTS
         // Verify if block was signed by leader
@@ -348,7 +369,7 @@ public class NodeService implements UDPService {
                 && verifyTransactions(block.getRequests(), senderId)))
             return;
 
-        // Doesnt add duplicate messages
+        // Doesn't add duplicate messages
         prepareMessages.addMessage(message);
 
         // Set instance blocks
@@ -365,16 +386,16 @@ public class NodeService implements UDPService {
                             "{0} - Already received PREPARE message for Consensus Instance {1}, Round {2}, "
                                     + "replying again to make sure it reaches the initial sender",
                             config.getId(), consensusInstance, round));
-                            
-            ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
-                .setConsensusInstance(consensusInstance)
-                .setRound(round)
-                .setReplyTo(senderId)
-                .setReplyToMessageId(message.getMessageId())
-                .setMessage(instance.getCommitMessage().toJson())
-                .build();
 
-                link.send(senderId, m);
+            ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
+                    .setConsensusInstance(consensusInstance)
+                    .setRound(round)
+                    .setReplyTo(senderId)
+                    .setReplyToMessageId(message.getMessageId())
+                    .setMessage(instance.getCommitMessage().toJson())
+                    .build();
+
+            link.send(senderId, m);
         }
 
         // Find block with valid quorum
@@ -389,55 +410,36 @@ public class NodeService implements UDPService {
             // Must reply to prepare message senders
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
+
             // Verify transactions validity and update temporary state
-            Map<String, List<Integer>> updateSignatures = this.tryAddBlock(consensusInstance, preparedBlock.get());
-            if (updateSignatures.size() == 0) {
+            Map<String, UpdateAccount> updateAccount = this.tryAddBlock(consensusInstance, preparedBlock.get());
+
+            if (updateAccount.size() == 0) {
                 // Reply to every prepare message sender with the information that the block
                 // prepared is invalid
                 // and therefore no update account signatures will be sent
-
                 CommitMessage c = new CommitMessage(false);
                 instance.setCommitMessage(c);
-                
+
                 sendersMessage.stream().forEach(senderMessage -> {
                     ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
-                    .setConsensusInstance(consensusInstance)
-                    .setRound(round)
-                    .setReplyTo(senderMessage.getSenderId())
-                    .setReplyToMessageId(senderMessage.getMessageId())
-                    .setMessage(c.toJson())
-                    .build();
+                            .setConsensusInstance(consensusInstance)
+                            .setRound(round)
+                            .setReplyTo(senderMessage.getSenderId())
+                            .setReplyToMessageId(senderMessage.getMessageId())
+                            .setMessage(c.toJson())
+                            .build();
 
                     link.send(senderMessage.getSenderId(), m);
                 });
             } else {
-                // Sign account updates
-                Map<String, String> accountSignatures = new HashMap<>();
-                for (Account account : accountUpdates) {
-                    String accountSignature;
-                    UpdateAccount upAcc = new UpdateAccount(account.getPublicKeyHash(), account.getBalance(),
-                            consensusInstance);
-                    try {
-                        accountSignature = RSAEncryption.sign(upAcc.toJson(), this.config.getPrivateKeyPath());
-                    } catch (Exception e) {
-                        LOGGER.log(Level.INFO,
-                                MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
-                                        config.getId(), consensusInstance));
-                        e.printStackTrace();
-                        return;
-                    }
-                    accountSignatures.put(account.getPublicKeyHash(), accountSignature);
-                    this.ledger.addAccountUpdate(consensusInstance, account.getPublicKeyHash(), upAcc);
-                }
-
-                CommitMessage c = new CommitMessage(true);
-                c.setUpdateAccountSignatures(accountSignatures);
-                instance.setCommitMessage(c);
-
                 // Reply to every prepare message received with the signatures of the updated
                 // account
                 // This serves as proof that the update is valid (if a quorum of signatures is
                 // obtained)
+                CommitMessage c = new CommitMessage(true, updateAccount);
+                instance.setCommitMessage(c);
+
                 sendersMessage.stream().forEach(senderMessage -> {
                     ConsensusMessage m = new ConsensusMessageBuilder(config.getId(), Message.Type.COMMIT)
                             .setConsensusInstance(consensusInstance)
@@ -453,32 +455,30 @@ public class NodeService implements UDPService {
         }
     }
 
+    /*
+     * Verify if the signatures of the updated accounts are valid
+     * The signatures wi
+     */
     private boolean verifyAccountSignatures(String senderId, int consensusInstance, CommitMessage message) {
-        Map<String, String> accountSignatures = message.getUpdateAccountSignatures();
-        if (accountSignatures == null) {
+        Map<String, UpdateAccount> accountSignatures = message.getUpdateAccountSignatures();
+
+        if ((message.isValidBlock() && accountSignatures.size() == 0)
+                || (!message.isValidBlock() && accountSignatures.size() != 0)) {
             return false;
         }
 
+        // Get sender public key from config
         Optional<ProcessConfig> senderConfig = Arrays.stream(this.clientsConfig)
                 .filter(client -> client.getId().equals(senderId)).findFirst();
-
         if (senderConfig.isEmpty()) {
             return false;
         }
 
-        Map<String, UpdateAccount> accountUpdates = this.ledger.getAccountUpdates(consensusInstance);
+        for (var entry : accountSignatures.entrySet()) {
+            String signature = entry.getKey();
+            UpdateAccount accountUpdate = entry.getValue();
 
-        if (accountUpdates == null || accountUpdates.size() != accountSignatures.size()) {
-            return false;
-        }
-
-        for (Map.Entry<String, String> entry : accountSignatures.entrySet()) {
-            String publicKeyHash = entry.getKey();
-            String signature = entry.getValue();
-
-            UpdateAccount AccountUpdate = accountUpdates.get(publicKeyHash);
-
-            if (AccountUpdate == null || !RSAEncryption.verifySignature(AccountUpdate.toJson(), signature,
+            if (!RSAEncryption.verifySignature(accountUpdate.toJson(), signature,
                     senderConfig.get().getPublicKeyPath())) {
                 return false;
             }
@@ -504,8 +504,16 @@ public class NodeService implements UDPService {
 
         CommitMessage commitMessage = message.deserializeCommitMessage();
 
-        if (!verifyAccountSignatures(senderId, consensusInstance, commitMessage))
+        if (!verifyAccountSignatures(senderId, consensusInstance, commitMessage)) {
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format(
+                            "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                    + "  @  WARNING: INVALID ACCOUNT UPDATE SIGNATURES!  @\n"
+                                    + "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                    + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                            senderId));
             return;
+        }
 
         commitMessages.addMessage(message);
 
@@ -532,48 +540,61 @@ public class NodeService implements UDPService {
             return;
         }
 
-        Optional<Boolean> commitQuorum = commitMessages.hasValidCommitQuorum(config.getId(), consensusInstance, round);
+        Optional<List<ConsensusMessage>> commitQuorum = commitMessages.hasValidCommitQuorum(config.getId(),
+                consensusInstance, round);
 
         if (commitQuorum.isPresent() && instance.getCommittedRound() < round) {
 
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
-            boolean successfulAdd = commitQuorum.get();
+            // They are all the same, so we can just get the first one
+            Map<String, UpdateAccount> accountUpdates = commitQuorum.get().get(0).deserializeCommitMessage().getUpdateAccountSignatures();
+
+            boolean successfulAdd = accountUpdates.size() > 0;
 
             if (successfulAdd) {
+
+                // Store signatures from other nodes
+                commitQuorum.get().stream().forEach((m) -> {
+                    String signerId = m.getSenderId();
+                    Map<String, UpdateAccount> updates = m.deserializeCommitMessage().getUpdateAccountSignatures();
+                    updates.entrySet().stream().forEach((entry) -> {
+                        String signature = entry.getKey();
+                        UpdateAccount accountUpdate = entry.getValue();
+                        this.ledger.addAccountUpdateSignature(consensusInstance, accountUpdate.getHashPubKey(), signerId, signature);
+                    });
+                });
+                
+                // Apply temporary transactions to account and append block to blockchain
                 this.ledger.commitTransactions(consensusInstance);
+                this.blockchain.put(consensusInstance, instance.getPreparedBlock());
 
-                Map<String, UpdateAccount> accountUpdates = this.ledger.getAccountUpdates(consensusInstance);
-                Map<String, Map<String, String>> accountUpdateSignatures = new HashMap<>();
+                // Reply to clients with the updated account and list of signatures
+                accountUpdates.values().stream()
+                        .filter(updateAccount -> updateAccount.getNonces().size() > 0)
+                        .forEach((updateAccount) -> {
+                            try {
+                                LedgerResponse response = new LedgerResponse(this.config.getId(), true, updateAccount,
+                                        this.ledger.getAccountUpdateSignatures(consensusInstance, senderId));
 
-                commitMessages.getMessages(consensusInstance, round).entrySet().stream().forEach(entry -> {
-                    String sender = entry.getKey();
-                    ConsensusMessage m = entry.getValue();
-                    CommitMessage c = m.deserializeCommitMessage();
-                    accountUpdateSignatures.put(sender, c.getUpdateAccountSignatures());
-                });
-
-                accountUpdates.forEach((publicKeyHash, updateAccount) -> {
-                    try {
-                        LedgerResponse response = new LedgerResponse(this.config.getId(), true, updateAccount,
-                                accountUpdateSignatures);
-                        this.link.send(this.ledger.getAccount(publicKeyHash).getOwnerId(), response);
-                    } catch (Exception e) {
-                        LOGGER.log(Level.INFO,
-                                MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
-                                        config.getId(), consensusInstance));
-                        e.printStackTrace();
-                    }
-                });
+                                this.link.send(updateAccount.getOwnerId(), response);
+                            } catch (Exception e) {
+                                LOGGER.log(Level.INFO,
+                                        MessageFormat.format(
+                                                "{0} - Error signing account update for consensus instance {1}",
+                                                config.getId(), consensusInstance));
+                                e.printStackTrace();
+                            }
+                        });
             } else {
-                instance.getPreparedBlock()
-                        .getRequests()
-                        .stream()
+
+                // Reply to every request saying that the block was not valid
+                instance.getPreparedBlock().getRequests().stream()
                         .map(Message::getSenderId)
                         .forEach(id -> {
                             try {
-                                LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd);
+                                LedgerResponse response = new LedgerResponse(this.config.getId(), false);
                                 this.link.send(id, response);
                             } catch (Exception e) {
                                 LOGGER.log(Level.INFO,

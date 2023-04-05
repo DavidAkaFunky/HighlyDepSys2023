@@ -6,6 +6,8 @@ import pt.ulisboa.tecnico.hdsledger.communication.UpdateAccount;
 
 public class Account {
 
+    // Owner ID
+    private String ownerId;
     // Account identifier
     private String publicKeyHash;
     // Most recent consensus instance that updated balance
@@ -17,9 +19,14 @@ public class Account {
     // Initial balance
     private static final int INITIAL_BALANCE = 100;
 
-    public Account(String publicKeyHash) {
+    public Account(String ownerId, String publicKeyHash) {
+        this.ownerId = ownerId;
         this.publicKeyHash = publicKeyHash;
         this.balance = new BigDecimal(INITIAL_BALANCE);
+    }
+
+    public String getOwnerId() {
+        return ownerId;
     }
 
     public String getPublicKeyHash() {

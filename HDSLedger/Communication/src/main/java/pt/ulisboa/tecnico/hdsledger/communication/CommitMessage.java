@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import com.google.gson.Gson;
@@ -9,26 +10,23 @@ public class CommitMessage {
     // True if the prepared block is valid
     private boolean validBlock;
     // Map public key hash -> signature for updated account
-    private Map<String, String> updateAccountSignatures;
+    private Map<String, UpdateAccount> accountUpdates = new HashMap<>();
 
     public CommitMessage(boolean validBlock) {
         this.validBlock = validBlock;
     }
 
-    public void setUpdateAccountSignatures(Map<String, String> updateAccountSignatures) {
-        this.updateAccountSignatures = updateAccountSignatures;
+    public CommitMessage(boolean validBlock, Map<String, UpdateAccount> accountUpdates) {
+        this.validBlock = validBlock;
+        this.accountUpdates = accountUpdates;
     }
 
-    public Map<String, String> getUpdateAccountSignatures() {
-        return updateAccountSignatures;
+    public Map<String, UpdateAccount> getUpdateAccountSignatures() {
+        return accountUpdates;
     }
 
     public boolean isValidBlock() {
         return validBlock;
-    }
-
-    public void setValidBlock(boolean validBlock) {
-        this.validBlock = validBlock;
     }
 
     public String toJson() {

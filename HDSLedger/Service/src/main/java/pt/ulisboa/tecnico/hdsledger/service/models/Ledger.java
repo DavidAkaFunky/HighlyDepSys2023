@@ -28,10 +28,23 @@ public class Ledger {
     // Map consensus instance -> public key hash -> account update
     private final Map<Integer, Map<String, UpdateAccount>> accountUpdates = new ConcurrentHashMap<>();
 
+    // Map consensus instance -> public key hash -> signer Id -> account update signature
+    private final Map<Integer, Map<String, Map<String, String>>> accountUpdateSignatures = new ConcurrentHashMap<>();
+
     public Ledger() {
     }
 
-    public Optional<Account> createAccount(LedgerRequestCreate request) {
+    public void addAccountUpdateSignature(int consensusInstance, String publicKeyHash, String signerId, String signature) {
+        accountUpdateSignatures.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
+        accountUpdateSignatures.get(consensusInstance).putIfAbsent(publicKeyHash, new ConcurrentHashMap<>());
+        accountUpdateSignatures.get(consensusInstance).get(publicKeyHash).put(signerId, signature);
+    }
+
+    public Map<String, String> getAccountUpdateSignatures(int consensusInstance, String ownerId) {
+        return accountUpdateSignatures.get(consensusInstance).get(ownerId);
+    }
+
+    public Optional<Account> createAccount(String ownerId, LedgerRequestCreate request) {
         PublicKey publicKey = request.getAccountPubKey();
         String publicKeyHash;
         try {
@@ -40,7 +53,7 @@ public class Ledger {
             return Optional.empty();
         }
         // Put returns null if the key was not present
-        Account acc = new Account(publicKeyHash);
+        Account acc = new Account(ownerId, publicKeyHash);
         if (temporaryAccounts.put(publicKeyHash, acc) == null){
             return Optional.of(acc);
         }
@@ -50,11 +63,13 @@ public class Ledger {
     public void revertCreateAccount(LedgerRequestCreate request) {
         PublicKey publicKey = request.getAccountPubKey();
         String publicKeyHash;
+
         try {
             publicKeyHash = RSAEncryption.digest(publicKey.toString());
         } catch (NoSuchAlgorithmException e) {
             return;
         }
+
         // Put returns null if the key was not present
         temporaryAccounts.remove(publicKeyHash);
     }
@@ -72,11 +87,13 @@ public class Ledger {
         } catch (NoSuchAlgorithmException e) {
             return new ArrayList<>();
         }
+
         Account srcAccount = temporaryAccounts.get(srcHash);
         Account destAccount = temporaryAccounts.get(destHash);
         if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(amount)) {
             return new ArrayList<>();
         }
+
         destAccount.addBalance(amount);
         List<Account> accounts = new ArrayList<>();
         accounts.add(srcAccount);
@@ -87,12 +104,14 @@ public class Ledger {
     public void revertTransfer(LedgerRequestTransfer request) {
         String srcHash;
         String destHash;
+
         try {
             srcHash = RSAEncryption.digest(request.getSourcePubKey().toString());
             destHash = RSAEncryption.digest(request.getDestinationPubKey().toString());
         } catch (NoSuchAlgorithmException e) {
             return;
         }
+
         BigDecimal amount = request.getAmount();
         Account tmpSrcAccount = temporaryAccounts.get(srcHash);
         Account tmpDestAccount = temporaryAccounts.get(destHash);
@@ -107,7 +126,7 @@ public class Ledger {
     public void commitTransactions(int consensusInstance) {
         temporaryAccounts.forEach((pubKeyHash, tmpAcc) -> {
             UpdateAccount update = accountUpdates.get(consensusInstance).get(pubKeyHash);
-            accounts.putIfAbsent(pubKeyHash, new Account(pubKeyHash));
+            accounts.putIfAbsent(pubKeyHash, new Account(update.getOwnerId(), pubKeyHash));
             Account acc = accounts.get(pubKeyHash);
             acc.updateAccount(update, pubKeyHash);
         });
@@ -115,6 +134,10 @@ public class Ledger {
 
     public Account getAccount(String publicKeyHash) {
         return accounts.get(publicKeyHash);
+    }
+
+    public Account getTemporaryAccount(String publicKeyHash) {
+        return temporaryAccounts.get(publicKeyHash);
     }
 
     public void addAccountUpdate(int consensusInstance, String publicKeyHash, UpdateAccount updateAccount) {

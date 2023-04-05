@@ -2,7 +2,10 @@ package pt.ulisboa.tecnico.hdsledger.service.models;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.text.MessageFormat;
@@ -10,6 +13,7 @@ import java.text.MessageFormat;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
+import pt.ulisboa.tecnico.hdsledger.communication.UpdateAccount;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 
 public class MessageBucket {
@@ -62,21 +66,23 @@ public class MessageBucket {
     /*
      * 
      */
-    public Optional<Boolean> hasValidCommitQuorum(String nodeId, int instance, int round) {
+    public Optional<List<ConsensusMessage>> hasValidCommitQuorum(String nodeId, int instance, int round) {
         // Create mapping of value to frequency
-        HashMap<Boolean, Integer> frequency = new HashMap<Boolean, Integer>();
+        HashMap<Collection<UpdateAccount>, List<ConsensusMessage>> messages = new HashMap<Collection<UpdateAccount>, List<ConsensusMessage>>();
         bucket.get(instance).get(round).values().forEach((message) -> {
             CommitMessage commitMessage = message.deserializeCommitMessage();
-            boolean valid = commitMessage.isValidBlock();
-            frequency.put(valid, frequency.getOrDefault(valid, 0) + 1);
+            Collection<UpdateAccount> updates = commitMessage.getUpdateAccountSignatures().values();
+            List<ConsensusMessage> msgs = messages.getOrDefault(updates, new ArrayList<>());
+            msgs.add(message);
+            messages.put(updates, msgs);
         });
 
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
-        return frequency.entrySet().stream().filter((Map.Entry<Boolean, Integer> entry) -> {
-            return entry.getValue() >= quorumSize;
-        }).map((Map.Entry<Boolean, Integer> entry) -> {
-            return entry.getKey();
+        return messages.entrySet().stream().filter((Map.Entry<Collection<UpdateAccount>, List<ConsensusMessage>> entry) -> {
+            return entry.getValue().size() >= quorumSize;
+        }).map((Map.Entry<Collection<UpdateAccount>, List<ConsensusMessage>> entry) -> {
+            return entry.getValue();
         }).findFirst();
     }
 

@@ -7,6 +7,8 @@ import com.google.gson.Gson;
 
 public class UpdateAccount {
 
+    // Who to reply after consensus
+    private String ownerId;
     // Account identifier
     private String hashPubKey;
     // Account balance
@@ -16,7 +18,8 @@ public class UpdateAccount {
     // The collection of nonces that were processed in this round
     private List<Integer> nonces;
 
-    public UpdateAccount(String hashPubKey, BigDecimal balance, Integer consensusInstance, List<Integer> nonces) {
+    public UpdateAccount(String ownerId, String hashPubKey, BigDecimal balance, Integer consensusInstance, List<Integer> nonces) {
+        this.ownerId = ownerId;
         this.hashPubKey = hashPubKey;
         this.balance = balance;
         this.consensusInstance = consensusInstance;
@@ -35,11 +38,30 @@ public class UpdateAccount {
         return new Gson().toJson(this);
     }
 
+    public String getOwnerId() {
+        return ownerId;
+    }
+
     public String getHashPubKey() {
         return hashPubKey;
     }
 
     public Integer getConsensusInstance() {
         return consensusInstance;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        UpdateAccount that = (UpdateAccount) o;
+
+        if (ownerId != null ? !ownerId.equals(that.ownerId) : that.ownerId != null) return false;
+        if (hashPubKey != null ? !hashPubKey.equals(that.hashPubKey) : that.hashPubKey != null) return false;
+        if (balance != null ? !balance.equals(that.balance) : that.balance != null) return false;
+        if (consensusInstance != null ? !consensusInstance.equals(that.consensusInstance) : that.consensusInstance != null)
+            return false;
+        return nonces != null ? nonces.equals(that.nonces) : that.nonces == null;
     }
 }

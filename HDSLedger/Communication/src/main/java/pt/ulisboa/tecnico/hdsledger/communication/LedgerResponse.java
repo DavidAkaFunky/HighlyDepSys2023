@@ -8,17 +8,17 @@ public class LedgerResponse extends Message {
     
     // True if the prepared block is valid
     private boolean successful;
-    //
+    // The result of the transactions
     private UpdateAccount updateAccount;
     // Signatures of the account update
-    private Map<String, Map<String, String>> signatures;
+    private Map<String, String> signatures;
 
     public LedgerResponse(String senderId, boolean successful) {
         super(senderId, Type.REPLY);
         this.successful = successful;
     }
 
-    public LedgerResponse(String senderId, boolean successful, UpdateAccount updateAccount, Map<String, Map<String, String>> signatures) {
+    public LedgerResponse(String senderId, boolean successful, UpdateAccount updateAccount, Map<String, String> signatures) {
         this(senderId, successful);
         this.updateAccount = updateAccount;
         this.signatures = signatures;
@@ -32,7 +32,7 @@ public class LedgerResponse extends Message {
         return updateAccount;
     }
 
-    public Map<String, Map<String, String>> getSignatures() {
+    public Map<String, String> getSignatures() {
         return signatures;
     }
 
