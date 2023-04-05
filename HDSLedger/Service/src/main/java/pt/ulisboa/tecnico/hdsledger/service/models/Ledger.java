@@ -25,12 +25,12 @@ public class Ledger {
     // accounts when the consensus is decided.
     private final Map<String, Account> temporaryAccounts = new ConcurrentHashMap<>();
 
-    private final Map<Integer, Map<String, UpdateAccount>> AccountUpdates = new ConcurrentHashMap<>();
+    private final Map<Integer, Map<String, UpdateAccount>> accountUpdates = new ConcurrentHashMap<>();
 
     public Ledger() {
     }
 
-    public Optional<Account> createAccount(int consensusInstance, String senderId, LedgerRequestCreate request) {
+    public Optional<Account> createAccount(LedgerRequestCreate request) {
         PublicKey publicKey = request.getAccountPubKey();
         String publicKeyHash;
         try {
@@ -39,7 +39,7 @@ public class Ledger {
             return Optional.empty();
         }
         // Put returns null if the key was not present
-        Account acc = new Account(senderId, publicKeyHash);
+        Account acc = new Account(publicKeyHash);
         if (temporaryAccounts.put(publicKeyHash, acc) == null){
             return Optional.of(acc);
         }
@@ -61,7 +61,7 @@ public class Ledger {
     public List<Account> transfer(int consensusInstance, LedgerRequestTransfer request) {
         BigDecimal amount = request.getAmount();
         if (amount.compareTo(BigDecimal.ZERO) < 0)
-            return new ArrayList<Account>();
+            return new ArrayList<>();
 
         String srcHash;
         String destHash;
@@ -69,15 +69,15 @@ public class Ledger {
             srcHash = RSAEncryption.digest(request.getSourcePubKey().toString());
             destHash = RSAEncryption.digest(request.getDestinationPubKey().toString());
         } catch (NoSuchAlgorithmException e) {
-            return new ArrayList<Account>();
+            return new ArrayList<>();
         }
         Account srcAccount = temporaryAccounts.get(srcHash);
         Account destAccount = temporaryAccounts.get(destHash);
         if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(amount)) {
-            return new ArrayList<Account>();
+            return new ArrayList<>();
         }
         destAccount.addBalance(amount);
-        List<Account> accounts = new ArrayList<Account>();
+        List<Account> accounts = new ArrayList<>();
         accounts.add(srcAccount);
         accounts.add(destAccount);
         return accounts;
@@ -105,8 +105,8 @@ public class Ledger {
 
     public void commitTransactions(int consensusInstance) {
         temporaryAccounts.forEach((pubKeyHash, tmpAcc) -> {
-            UpdateAccount update = AccountUpdates.get(consensusInstance).get(pubKeyHash);
-            accounts.putIfAbsent(pubKeyHash, new Account(tmpAcc.getOwnerId(), pubKeyHash));
+            UpdateAccount update = accountUpdates.get(consensusInstance).get(pubKeyHash);
+            accounts.putIfAbsent(pubKeyHash, new Account(pubKeyHash));
             Account acc = accounts.get(pubKeyHash);
             acc.updateAccount(update, pubKeyHash);
         });
@@ -117,12 +117,12 @@ public class Ledger {
     }
 
     public void addAccountUpdate(int consensusInstance, String publicKeyHash, UpdateAccount updateAccount) {
-        AccountUpdates.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
-        AccountUpdates.get(consensusInstance).put(publicKeyHash, updateAccount);
+        accountUpdates.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
+        accountUpdates.get(consensusInstance).put(publicKeyHash, updateAccount);
     }
 
     public Map<String, UpdateAccount> getAccountUpdates(int consensusInstance) {
-        return AccountUpdates.get(consensusInstance);
+        return accountUpdates.get(consensusInstance);
     }
 
 }

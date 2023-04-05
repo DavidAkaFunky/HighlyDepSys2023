@@ -50,9 +50,14 @@ public class NodeService implements UDPService {
         this.commitMessages = new MessageBucket(nodesLength);
     }
 
-    public Set<Account> tryAddBlock(int instance, Block block) {
+    // pubKey -> List<SignedAccount>
+    // TODO fix this (passar a Mapa: publicKey -> List[Nonce])
+    // TODO enviar isto no prepare
+    // TODO uponCommit if quorum -> responder a cada cliente List[Nonce]
+    public Map<String, List<String>> tryAddBlock(int instance, Block block) {
 
-        Set<Account> accountUpdates = new HashSet<>();
+        // publicKeyHash -> {nonces}
+        Map<Account, Set<Integer>> nonces = new ConcurrentHashMap<>();
 
         boolean isValid = true;
 
@@ -61,23 +66,24 @@ public class NodeService implements UDPService {
         for (LedgerRequest request : requests) {
             if (request.getType() == LedgerRequest.Type.CREATE) {
                 LedgerRequestCreate create = request.deserializeCreate();
-                Optional<Account> newAcc = this.ledger.createAccount(instance, request.getSenderId(), create);
+                Optional<Account> newAcc = this.ledger.createAccount(create);
                 if (newAcc.isEmpty()) {
                     isValid = false;
                     break;
                 } else {
                     appliedCreations.add(create);
-                    accountUpdates.add(newAcc.get());
+                    Set<Integer> nonceSet = new HashSet<>();
+                    nonceSet.add(create.getNonce());
+                    nonces.put(newAcc.get(), nonceSet);
                 }
             }
         }
 
         if (!isValid) {
             ListIterator<LedgerRequestCreate> li = appliedCreations.listIterator(appliedCreations.size());
-            while (li.hasPrevious()) {
+            while (li.hasPrevious())
                 this.ledger.revertCreateAccount(li.previous());
-            }
-            return new HashSet<>();
+            return new ArrayList<>();
         }
 
         List<LedgerRequestTransfer> appliedTransfers = new ArrayList<>();
@@ -92,7 +98,10 @@ public class NodeService implements UDPService {
                         isValid = false;
                     else {
                         appliedTransfers.add(transfer);
-                        accountUpdates.addAll(accounts);
+                        Account srcAccount = accounts.get(0);
+                        Set<Integer> accountNonces = nonces.getOrDefault(srcAccount, new HashSet<>());
+                        accountNonces.add(transfer.getNonce());
+                        nonces.put(srcAccount, accountNonces);
                     }
                 }
                 default -> {
@@ -106,17 +115,34 @@ public class NodeService implements UDPService {
         }
         if (isValid) {
             this.blockchain.put(instance, block);
+            // assinar e criar update accounts
+            List<String> accountUpdates = new ArrayList<>();
+            for (Map.Entry<Account, Set<Integer>> entry : nonces.entrySet()) {
+                Account account = entry.getKey();
+                Set<Integer> accountNonces = entry.getValue();
+                String accountSignature;
+                UpdateAccount upAcc = new UpdateAccount(account.getPublicKeyHash(), account.getBalance(),
+                        instance, accountNonces);
+                try {
+                    accountSignature = RSAEncryption.sign(upAcc.toJson(), this.config.getPrivateKeyPath());
+                } catch (Exception e) {
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
+                                    config.getId(), consensusInstance));
+                    e.printStackTrace();
+                    return new ArrayList<>();
+                }
+                accountUpdates.add(accountSignature);
+                this.ledger.addAccountUpdate(instance, account.getPublicKeyHash(), upAcc);
+            }
             return accountUpdates;
         }
         ListIterator<LedgerRequestTransfer> li = appliedTransfers.listIterator(appliedTransfers.size());
         while (li.hasPrevious()) {
             this.ledger.revertTransfer(li.previous());
         }
-        return new HashSet<>();
-    }
-
-    public int getConsensusInstance() {
-        return consensusInstance.get();
+        // assinar e criar update accounts
+        return new ArrayList<>();
     }
 
     /*
@@ -180,6 +206,7 @@ public class NodeService implements UDPService {
         }
 
         // Only start a consensus instance if the last one was decided
+        // We need to be sure that the previous block has been decided
         while (lastDecidedConsensusInstance.get() < localConsensusInstance - 1) {
             try {
                 Thread.sleep(1000);
@@ -362,7 +389,7 @@ public class NodeService implements UDPService {
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
             // Verify transactions validity and update temporary state
-            Set<Account> accountUpdates = this.tryAddBlock(consensusInstance, preparedBlock.get());
+            List<String> updateSignatures = this.tryAddBlock(consensusInstance, preparedBlock.get());
             if (accountUpdates.size() == 0) {
                 // Reply to every prepare message sender with the information that the block
                 // prepared is invalid
@@ -542,7 +569,7 @@ public class NodeService implements UDPService {
                 instance.getPreparedBlock()
                         .getRequests()
                         .stream()
-                        .map(request -> request.getSenderId())
+                        .map(Message::getSenderId)
                         .forEach(id -> {
                             try {
                                 LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd);
