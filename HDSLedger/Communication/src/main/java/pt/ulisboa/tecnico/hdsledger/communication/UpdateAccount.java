@@ -1,9 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
 import java.math.BigDecimal;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
 
 import com.google.gson.Gson;
 
@@ -16,16 +14,16 @@ public class UpdateAccount {
     // Most recent consensus instance that updated balance
     private Integer consensusInstance;
     // The collection of nonces that were processed in this round
-    private Set<Integer> nonces = new HashSet<>();
+    private List<Integer> nonces;
 
-    public UpdateAccount(String hashPubKey, BigDecimal balance, Integer consensusInstance, Set<Integer> nonces) {
+    public UpdateAccount(String hashPubKey, BigDecimal balance, Integer consensusInstance, List<Integer> nonces) {
         this.hashPubKey = hashPubKey;
         this.balance = balance;
         this.consensusInstance = consensusInstance;
         this.nonces = nonces;
     }
 
-    public Set<Integer> getNonces() {
+    public List<Integer> getNonces() {
         return nonces;
     }
 

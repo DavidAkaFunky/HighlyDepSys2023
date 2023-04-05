@@ -25,6 +25,7 @@ public class Ledger {
     // accounts when the consensus is decided.
     private final Map<String, Account> temporaryAccounts = new ConcurrentHashMap<>();
 
+    // Map consensus instance -> public key hash -> account update
     private final Map<Integer, Map<String, UpdateAccount>> accountUpdates = new ConcurrentHashMap<>();
 
     public Ledger() {

@@ -54,10 +54,10 @@ public class NodeService implements UDPService {
     // TODO fix this (passar a Mapa: publicKey -> List[Nonce])
     // TODO enviar isto no prepare
     // TODO uponCommit if quorum -> responder a cada cliente List[Nonce]
-    public Map<String, List<String>> tryAddBlock(int instance, Block block) {
+    public Map<String, List<Integer>> tryAddBlock(int instance, Block block) {
 
         // publicKeyHash -> {nonces}
-        Map<Account, Set<Integer>> nonces = new ConcurrentHashMap<>();
+        Map<String, List<Integer>> nonces = new ConcurrentHashMap<>();
 
         boolean isValid = true;
 
@@ -72,9 +72,9 @@ public class NodeService implements UDPService {
                     break;
                 } else {
                     appliedCreations.add(create);
-                    Set<Integer> nonceSet = new HashSet<>();
+                    List<Integer> nonceSet = new ArrayList<>();
                     nonceSet.add(create.getNonce());
-                    nonces.put(newAcc.get(), nonceSet);
+                    nonces.put(newAcc.get().getPublicKeyHash(), nonceSet);
                 }
             }
         }
@@ -83,7 +83,7 @@ public class NodeService implements UDPService {
             ListIterator<LedgerRequestCreate> li = appliedCreations.listIterator(appliedCreations.size());
             while (li.hasPrevious())
                 this.ledger.revertCreateAccount(li.previous());
-            return new ArrayList<>();
+            return new HashMap<>();
         }
 
         List<LedgerRequestTransfer> appliedTransfers = new ArrayList<>();
@@ -99,9 +99,9 @@ public class NodeService implements UDPService {
                     else {
                         appliedTransfers.add(transfer);
                         Account srcAccount = accounts.get(0);
-                        Set<Integer> accountNonces = nonces.getOrDefault(srcAccount, new HashSet<>());
+                        List<Integer> accountNonces = nonces.getOrDefault(srcAccount, new ArrayList<>());
                         accountNonces.add(transfer.getNonce());
-                        nonces.put(srcAccount, accountNonces);
+                        nonces.put(srcAccount.getPublicKeyHash(), accountNonces);
                     }
                 }
                 default -> {
@@ -117,9 +117,9 @@ public class NodeService implements UDPService {
             this.blockchain.put(instance, block);
             // assinar e criar update accounts
             List<String> accountUpdates = new ArrayList<>();
-            for (Map.Entry<Account, Set<Integer>> entry : nonces.entrySet()) {
-                Account account = entry.getKey();
-                Set<Integer> accountNonces = entry.getValue();
+            for (Map.Entry<String, List<Integer>> entry : nonces.entrySet()) {
+                Account account = this.ledger.getAccount(entry.getKey());
+                List<Integer> accountNonces = entry.getValue();
                 String accountSignature;
                 UpdateAccount upAcc = new UpdateAccount(account.getPublicKeyHash(), account.getBalance(),
                         instance, accountNonces);
@@ -130,19 +130,19 @@ public class NodeService implements UDPService {
                             MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
                                     config.getId(), consensusInstance));
                     e.printStackTrace();
-                    return new ArrayList<>();
+                    return new HashMap<>();
                 }
                 accountUpdates.add(accountSignature);
                 this.ledger.addAccountUpdate(instance, account.getPublicKeyHash(), upAcc);
             }
-            return accountUpdates;
+            return nonces;
         }
         ListIterator<LedgerRequestTransfer> li = appliedTransfers.listIterator(appliedTransfers.size());
         while (li.hasPrevious()) {
             this.ledger.revertTransfer(li.previous());
         }
         // assinar e criar update accounts
-        return new ArrayList<>();
+        return new HashMap<>();
     }
 
     /*
@@ -274,9 +274,10 @@ public class NodeService implements UDPService {
                         "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Block {4}",
                         config.getId(), senderId, consensusInstance, round, block));
 
-        String errorLog = MessageFormat.format("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                + "@     WARNING: PRE-PREPARE FROM NON LEADER!     @\n"
-                + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+        String errorLog = MessageFormat.format(
+                  "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                + "  @     WARNING: PRE-PREPARE FROM NON LEADER!     @\n"
+                + "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
                 + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!", senderId);
 
         // BYZANTINE_TESTS
@@ -389,8 +390,8 @@ public class NodeService implements UDPService {
             Collection<ConsensusMessage> sendersMessage = prepareMessages.getMessages(consensusInstance, round)
                     .values();
             // Verify transactions validity and update temporary state
-            List<String> updateSignatures = this.tryAddBlock(consensusInstance, preparedBlock.get());
-            if (accountUpdates.size() == 0) {
+            Map<String, List<Integer>> updateSignatures = this.tryAddBlock(consensusInstance, preparedBlock.get());
+            if (updateSignatures.size() == 0) {
                 // Reply to every prepare message sender with the information that the block
                 // prepared is invalid
                 // and therefore no update account signatures will be sent
