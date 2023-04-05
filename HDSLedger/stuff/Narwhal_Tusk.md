@@ -145,4 +145,34 @@ Certificates can be storage can be offloaded to a CDN such as cloudflare or s3
 
 # 4 Building a Practical System
 
+# 4.1 Quorum-based reliable broadcast
+
+Problem:
+Unbounded memory to store all messages (for acks)
+Prevent DOS from byzantine nodes
+Avoid perfect point-to-point channels
+
+Solution:
+Each validator broadcasts a block for each round r
+If 2f+1 validators receive, they ack it with a signature. These sigs form a certificate of availability that is shared and potentially included in blocks at round r+1
+Once a validator advances to round r+1 it STOPS re-transmission and drops all pending undelivered messages from round < r+1
+
+However:
+A certificate of availability does not guarantee that all honest nodes received the block.
+
+Solution:
+If a block at round r+1 has a certificate, the totality property can be ensured for all 2f+1 blocks with certificates it contains from round r.
+Upon receiving a certificate at round r+1, validator can request all blocks in its causal history from validators that signed the certificate
+At least f+1 honest validators store each block.
+
+Summary:
+Block availability certification + their inclusion in subsequent blocks + pull mechanism to request missing blocks => reliable broadcast protocol
+Storage is bounded by the time it takes to advance a round
+
+# 4.2 Scale-Out Validators
+
+Main Ideia:
+Use many computers per validator to not be limited by the resources of a single machine
+
+...
 
