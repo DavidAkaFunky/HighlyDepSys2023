@@ -73,13 +73,14 @@ public class CollapsingSet implements Set<Integer> {
         synchronized (this.set) {
             if (integer == (floor + 1)) {
                 int newFloor = integer;
-                while (this.set.contains(newFloor)) {
-                    this.set.remove(newFloor);
-                    newFloor++;
+                boolean removeReturn = true;
+                this.set.add(integer);
+                while (this.set.contains(newFloor) && removeReturn) {
+                    removeReturn = this.set.remove(newFloor);
+                    this.floor = newFloor++;
                 }
-                this.floor = newFloor;
                 // should probably check the return value of the remove in the while
-                return true;
+                return removeReturn;
             } else return this.set.add(integer);
         }
     }

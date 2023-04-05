@@ -30,9 +30,9 @@ public class PerfectLink {
     // Class to deserialize messages to
     private final Class<? extends Message> messageClass;
     // Set of received messages from specific node (prevent duplicates)
-    private final Map<String, Set<Integer>> receivedMessages = new ConcurrentHashMap<>();
+    private final Map<String, CollapsingSet> receivedMessages = new ConcurrentHashMap<>();
     // Set of received ACKs from specific node
-    private final Set<Integer> receivedAcks = ConcurrentHashMap.newKeySet();
+    private final CollapsingSet receivedAcks = new CollapsingSet();
     // Message counter
     private final AtomicInteger messageCounter = new AtomicInteger(0);
 
@@ -50,7 +50,7 @@ public class PerfectLink {
         Arrays.stream(nodes).forEach(node -> {
             String id = node.getId();
             this.nodes.put(id, node);
-            receivedMessages.put(id, new HashSet<>());
+            receivedMessages.put(id, new CollapsingSet());
         });
 
         try {
