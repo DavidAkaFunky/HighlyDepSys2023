@@ -15,14 +15,13 @@ public class Account {
     // Update account signature
     private String updateAccountSignature;
     // Account balance
-    private BigDecimal balance;
+    private BigDecimal balance = new BigDecimal(INITIAL_BALANCE);
     // Initial balance
     private static final int INITIAL_BALANCE = 100;
 
     public Account(String ownerId, String publicKeyHash) {
         this.ownerId = ownerId;
         this.publicKeyHash = publicKeyHash;
-        this.balance = new BigDecimal(INITIAL_BALANCE);
     }
 
     public String getOwnerId() {
