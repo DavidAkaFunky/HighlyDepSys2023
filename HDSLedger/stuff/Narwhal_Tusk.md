@@ -96,3 +96,53 @@ Steps to reduce the need for double transmission and enable scaling out:
     - Enables scale-out
     - One primary integrates references to batches in Mempool primary blocks
     - Allows quasi-linear scaling
+
+# 3 Narwhal Core Design
+
+# 3.1 The Narwhal Mempool
+(Figure 2 in the paper)
+
+Validators keep local round r
+Validators receive transactions from clients and store them
+Validators receive certificates of availability for blocks at r and store them
+Once they accumulate 2f+1 certificates they create and reliably broadcast a block for the new round
+Validators receive the block, verify stuff, store it and reply with a signature of the block.
+Once validator accumulates 2f+1 signatures it combines them into a certificate of block validity and sends it to all other validators (to include them in the next block at the next round)
+
+
+# 3.2 Using Narwhal for consensus
+(Figure 3 in the paper)
+
+Before:
+Leader who proposes a block of transactions that is certified by other validators
+Now:
+Leader proposes one or more certificates of availability created in Narwhal
+
+Narwhal guarantees that given a certificate all validators see the same causal history which is itself a DAG over blocks.
+Any deterministic rule over this DAG leads to the same total ordering of blocks for all validators, achieving consensus.
+
+Improvements:
+- Leader used to use an enormous amount of bandwidth while validators underused it. Narwhal ensures better network utilization and throughput.
+- Eventually-synchronous consensus throughput during asynchrony periods was zero but by using Narwhal it continues to share blocks and form certificates of availability.
+
+# 3.3 Garbage Collection
+
+DAG is a local structure that will eventually converge to the same version in all validators but there is no guarantee on when this will happen.
+
+Problem:
+Validators may have to keep all blocks and certificates readily accessible to help their pees catch up and be able to process arbitrary old messages.
+
+Solution:
+Narwhal allows validators to decide on the validity of a block only from information about the current round. Any other message (e.g. certified blocks) carry enough information about the validity to be established
+
+Result:
+Valdiators are not required to examine the entire history to verify new blocks.
+Validators can operate with a fixed size memory
+
+Details:
+Narwhal uses consensus protocol to agree on gargabe collection rounds. Why? Because validators may disagree on what round to garbage collect and this can cause issues
+Certificates can be storage can be offloaded to a CDN such as cloudflare or s3
+
+# 4 Building a Practical System
+
+
