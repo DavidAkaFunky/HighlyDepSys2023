@@ -22,27 +22,35 @@ public class CollapsingSet implements Set<Integer> {
 
     @Override
     public int size() {
-        return floor + set.size();
+        synchronized (this.set) {
+            return this.floor + this.set.size();
+        }
     }
 
     @Override
     public boolean isEmpty() {
-        return this.size() == 0;
+        synchronized (this.set) {
+           return (this.floor + this.set.size()) == 0;
+        }
     }
 
     @Override
     public boolean contains(Object o) {
-        if (!(o instanceof Integer i)) return false;
-        return i <= this.floor || this.set.contains(i);
+        synchronized (this.set) {
+            if (!(o instanceof Integer i)) return false;
+            return i <= this.floor || this.set.contains(i);
+        }
     }
 
     private Set<Integer> getFullSet() {
         // inefficient
-        Set<Integer> s = new HashSet<>();
-        if (this.floor > 0)
-            s = IntStream.rangeClosed(1, floor).boxed().collect(Collectors.toCollection(HashSet::new));
-        s.addAll(this.set);
-        return s;
+        synchronized (this.set) {
+            Set<Integer> s = new HashSet<>();
+            if (this.floor > 0)
+                s = IntStream.rangeClosed(1, floor).boxed().collect(Collectors.toCollection(HashSet::new));
+            s.addAll(this.set);
+            return s;
+        }
     }
 
     @Override
@@ -62,16 +70,18 @@ public class CollapsingSet implements Set<Integer> {
 
     @Override
     public boolean add(Integer integer) {
-        if (integer == (floor + 1)) {
-            int newFloor = integer;
-            while (this.set.contains(newFloor)) {
-                this.set.remove(newFloor);
-                newFloor++;
-            }
-            this.floor = newFloor;
-            // should probably check the return value of the remove in the while
-            return true;
-        } else return this.set.add(integer);
+        synchronized (this.set) {
+            if (integer == (floor + 1)) {
+                int newFloor = integer;
+                while (this.set.contains(newFloor)) {
+                    this.set.remove(newFloor);
+                    newFloor++;
+                }
+                this.floor = newFloor;
+                // should probably check the return value of the remove in the while
+                return true;
+            } else return this.set.add(integer);
+        }
     }
 
     @Override
@@ -106,7 +116,9 @@ public class CollapsingSet implements Set<Integer> {
 
     @Override
     public void clear() {
-        this.floor = 0;
-        this.set.clear();
+        synchronized (this.set) {
+            this.floor = 0;
+            this.set.clear();
+        }
     }
 }
