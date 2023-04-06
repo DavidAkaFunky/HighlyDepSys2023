@@ -24,10 +24,8 @@ public class Ledger {
     // valid meaning we need to alter account balances. This state is "merged" with
     // accounts when the consensus is decided.
     private final Map<String, Account> temporaryAccounts = new ConcurrentHashMap<>();
-
     // Map consensus instance -> public key hash -> account update
     private final Map<Integer, Map<String, UpdateAccount>> accountUpdates = new ConcurrentHashMap<>();
-
     // Map consensus instance -> public key hash -> signer Id -> account update signature
     private final Map<Integer, Map<String, Map<String, String>>> accountUpdateSignatures = new ConcurrentHashMap<>();
 
@@ -40,8 +38,12 @@ public class Ledger {
         accountUpdateSignatures.get(consensusInstance).get(publicKeyHash).put(signerId, signature);
     }
 
-    public Map<String, String> getAccountUpdateSignatures(int consensusInstance, String ownerId) {
-        return accountUpdateSignatures.get(consensusInstance).get(ownerId);
+    public Map<String, String> getAccountUpdateSignatures(int consensusInstance, String publicKeyHash) {
+        return accountUpdateSignatures.get(consensusInstance).get(publicKeyHash);
+    }
+
+    public Map<Integer, Map<String, Map<String, String>>> getAccountUpdateSignatures() {
+        return accountUpdateSignatures;
     }
 
     public Optional<Account> createAccount(String ownerId, LedgerRequestCreate request) {

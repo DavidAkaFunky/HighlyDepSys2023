@@ -8,6 +8,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
+import pt.ulisboa.tecnico.hdsledger.service.models.Ledger;
 import pt.ulisboa.tecnico.hdsledger.service.services.LedgerService;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
 
@@ -53,13 +54,16 @@ public class Node {
             ProcessConfig[] clients = new ProcessConfigBuilder().fromFile(clientsConfigPath);
 
             // Abstraction to send and receive messages
-            PerfectLink linkToNodes = new PerfectLink(nodeConfig, nodeConfig.getPort(), otherNodes, ConsensusMessage.class);
+            PerfectLink linkToNodes = new PerfectLink(nodeConfig, nodeConfig.getPort(), otherNodes,
+                    ConsensusMessage.class);
             PerfectLink linkToClients = new PerfectLink(nodeConfig, nodeConfig.getClientPort(), clients,
                     LedgerRequest.class);
 
+            Ledger ledger = new Ledger();
             // Services that implement listen from UDPService
-            NodeService nodeService = new NodeService(clients, nodeConfig, linkToNodes, leaderConfig, otherNodes.length);
-            LedgerService ledgerService = new LedgerService(clients, id, nodeService, linkToClients, blockSize);
+            NodeService nodeService = new NodeService(clients, nodeConfig, linkToNodes, leaderConfig, otherNodes.length,
+                    ledger);
+            LedgerService ledgerService = new LedgerService(clients, id, nodeService, linkToClients, blockSize, ledger);
 
             nodeService.listen();
             ledgerService.listen();

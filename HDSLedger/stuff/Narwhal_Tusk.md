@@ -16,7 +16,7 @@ Theoretical message complexity should not be the only optimisation target:
 - Centralised algorithms make the leader become a bottleneck
 - Metadata (e.g. votes) and block messages contribute evenly for the complexity, although block messages are many orders of magnitude larger than consensus messages
 
-Hypothesis: "a better Mempool, that reliably distributes transactions, is the key enabler of a high-performance ledger It should be separated from the consensus protocol altogether, leaving consensus only the job of ordering small fixedsize references. This leads to an overall system throughput being largely unaffected by consensus throughput"
+Hypothesis: "a better Mempool, that reliably distributes transactions, is the key enabler of a high-performance ledger It should be separated from the consensus protocol altogether, leaving consensus only the job of ordering small fixed size references. This leads to an overall system throughput being largely unaffected by consensus throughput"
 
 How to test:
 Use Hotstuff but separate block dissemination into a separate system called "Batched-HS"
@@ -80,7 +80,7 @@ Steps to reduce the need for double transmission and enable scaling out:
     - Leader proposes a certificate of the block
     - Problem: If the consensus loses liveness, the number to be committed may grow indefinitely
 - Propose a single certificate for multiple blocks
-    - Provides causalty
+    - Provides causality
     - Have a block's certificate include certificates of past Mempool blocks, from all validators, allowing it to refer to the block's full causal history
     - Ensures that delays in reaching consensus impact latency but not average throughput–as mempool blocks continue to be produced and are eventually committed
     - Problems:
@@ -136,7 +136,7 @@ Solution:
 Narwhal allows validators to decide on the validity of a block only from information about the current round. Any other message (e.g. certified blocks) carry enough information about the validity to be established
 
 Result:
-Valdiators are not required to examine the entire history to verify new blocks.
+Validators are not required to examine the entire history to verify new blocks.
 Validators can operate with a fixed size memory
 
 Details:
@@ -194,14 +194,14 @@ Theoretical bottleneck: Size of primary blocks
 Tusk validators operate a Narwhal mempool, but also include in each of their blocks information to generate a distributed perfect random coin
 
 DAG interpretation:
-- Every validator locally interprets its local view of the DAG and use the shared randomness to determine the total order
+- Every validator locally interprets its local view of the DAG and uses the shared randomness to determine the total order
 - Division into waves, each of which consisting of 3 consecutive rounds:
     - Each validator proposes its block (and consequently all its causal history)
     - Each validator votes on the proposals by including them in their block
     - Produce randomness to elect one random leader’s block in retrospect
 - After revealing the coin, each validator 𝑣 commits the elected leader block 𝑏 of a wave 𝑤 if there are 𝑓 +1 blocks in the second round of 𝑤 (in 𝑣’s local view of the DAG) that refer to 𝑏
 - 𝑣 then carefully orders 𝑏’s causal history up to the garbage collection point
-- After committing the leader in a wave 𝑤, 𝑣 sets it to be the next candidate to be ordered and recursively go back to the last wave 𝑤' in which it committed a leader
+- After committing the leader in a wave 𝑤, 𝑣 sets it to be the next candidate to be ordered and recursively goes back to the last wave 𝑤' in which it committed a leader
 
 # 5.1 Safety intuition
 

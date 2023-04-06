@@ -7,6 +7,7 @@ import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
 import pt.ulisboa.tecnico.hdsledger.communication.Message;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestBalance.ConsistencyMode;
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 
 import java.io.IOException;
@@ -37,6 +38,8 @@ public class Library {
     private PerfectLink link;
     // Current client nonce
     private AtomicInteger nonce = new AtomicInteger(0);
+    // Known consensus instance (for read-your-writes)
+    private int knownConsensusInstance = 0;
     // Responses received from the nodes <nonce, responses[]>, its an array because
     // we wait for f+1 responses
     private final Map<Integer, List<LedgerResponse>> responses = new ConcurrentHashMap<>();
@@ -129,7 +132,7 @@ public class Library {
      * 
      * @param consistencyMode Consistency mode
      */
-    public void balance(String accountId, String consistencyMode) {
+    public void balance(String accountId, ConsistencyMode consistencyMode) {
 
         int currentNonce = this.nonce.getAndIncrement();
 
@@ -148,7 +151,7 @@ public class Library {
 
         // Each LedgerRequest receives a specific ledger request which is serialized and
         // signed
-        LedgerRequestBalance requestRead = new LedgerRequestBalance(accountPubKey, consistencyMode);
+        LedgerRequestBalance requestRead = new LedgerRequestBalance(accountPubKey, consistencyMode, this.knownConsensusInstance);
         String requestTransferSerialized = new Gson().toJson(requestRead);
         String signature;
         try {
@@ -303,6 +306,11 @@ public class Library {
                                                                         config.getId(), request.getSenderId(),
                                                                         response.getUpdateAccount()
                                                                                 .getUpdatedBalance()));
+
+                                                        this.knownConsensusInstance = response.getUpdateAccount()
+                                                                .getConsensusInstance();
+                                                        // Don't need to process other responses for this specific nonce
+                                                        break;
                                                     }
                                                 }
 
@@ -327,6 +335,11 @@ public class Library {
                                                                         response.getUpdateAccount().getUpdatedBalance(),
                                                                         response.getUpdateAccount()
                                                                                 .getUpdatedBalance()));
+
+                                                        this.knownConsensusInstance = response.getUpdateAccount()
+                                                                .getConsensusInstance();
+                                                        // Don't need to process other responses for this specific nonce
+                                                        break;
                                                     }
                                                 }
 

@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.client;
 
+import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestBalance.ConsistencyMode;
 import pt.ulisboa.tecnico.hdsledger.library.Library;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
@@ -108,7 +109,8 @@ public class Client {
                     String accountId = tokens[1];
                     String consistencyMode = tokens[2];
                     System.out.println("Reading blockchain with " + consistencyMode + " mode...");
-                    library.balance(accountId, consistencyMode);
+                    ConsistencyMode mode = consistencyMode.equals("strong") ? ConsistencyMode.STRONG : ConsistencyMode.WEAK;
+                    library.balance(accountId, mode);
                 }
                 case "exit" -> {
                     System.out.println("Exiting...");

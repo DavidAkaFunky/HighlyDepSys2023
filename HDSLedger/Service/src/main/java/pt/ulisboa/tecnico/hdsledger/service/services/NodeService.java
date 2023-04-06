@@ -23,7 +23,7 @@ public class NodeService implements UDPService {
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
     // Blockchain
     private final Map<Integer, Block> blockchain = new ConcurrentHashMap<>();
-    private final Ledger ledger = new Ledger();
+    private Ledger ledger;
     // Consensus instance -> Round -> List of prepare messages
     private final MessageBucket prepareMessages;
     // Consensus instance -> Round -> List of commit messages
@@ -41,13 +41,14 @@ public class NodeService implements UDPService {
     private final PerfectLink link;
 
     public NodeService(ProcessConfig[] clientsConfig, ProcessConfig config, PerfectLink link,
-            ProcessConfig leaderConfig, int nodesLength) {
+            ProcessConfig leaderConfig, int nodesLength, Ledger ledger) {
         this.clientsConfig = clientsConfig;
         this.config = config;
         this.link = link;
         this.leaderConfig = leaderConfig;
         this.prepareMessages = new MessageBucket(nodesLength);
         this.commitMessages = new MessageBucket(nodesLength);
+        this.ledger = ledger;
     }
 
     /*
@@ -165,7 +166,7 @@ public class NodeService implements UDPService {
     }
 
     /*
-     *
+     *  Verify if a block was signed by the leader
      */
     private boolean checkIfSignedByLeader(String block, String leaderMessage, String errorLog) {
         if (this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.NONE
@@ -226,6 +227,7 @@ public class NodeService implements UDPService {
 
         // Only start a consensus instance if the last one was decided
         // We need to be sure that the previous block has been decided
+        // RIP Multi-paxos :'-( 
         while (lastDecidedConsensusInstance.get() < localConsensusInstance - 1) {
             try {
                 Thread.sleep(1000);

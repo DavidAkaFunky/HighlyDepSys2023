@@ -9,11 +9,19 @@ public class LedgerRequestBalance {
     // Account Public Key
     private String accountPubKey;
     // Consistency mode
-    private String consistencyMode;
+    private ConsistencyMode consistencyMode;
+    // Last known consensus instance
+    private int lastKnownConsensusInstance;
 
-    public LedgerRequestBalance(PublicKey accountPubKey, String consistencyMode) {
+    public enum ConsistencyMode {
+        STRONG,
+        WEAK
+    }
+
+    public LedgerRequestBalance(PublicKey accountPubKey, ConsistencyMode consistencyMode, int lastKnownConsensusInstance) {
         this.accountPubKey = RSAEncryption.encodePublicKey(accountPubKey);
         this.consistencyMode = consistencyMode;
+        this.lastKnownConsensusInstance = lastKnownConsensusInstance;
     }
 
     public PublicKey getAccountPubKey() {
@@ -24,11 +32,19 @@ public class LedgerRequestBalance {
         this.accountPubKey = RSAEncryption.encodePublicKey(accountPubKey);
     }
 
-    public String getConsistencyMode() {
+    public ConsistencyMode getConsistencyMode() {
         return consistencyMode;
     }
 
-    public void setConsistencyMode(String consistencyMode) {
+    public void setConsistencyMode(ConsistencyMode consistencyMode) {
         this.consistencyMode = consistencyMode;
+    }
+
+    public int getLastKnownConsensusInstance() {
+        return lastKnownConsensusInstance;
+    }
+
+    public void setLastKnownConsensusInstance(int lastKnownConsensusInstance) {
+        this.lastKnownConsensusInstance = lastKnownConsensusInstance;
     }
 }

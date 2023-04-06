@@ -1,10 +1,10 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
-import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.service.models.Account;
 import pt.ulisboa.tecnico.hdsledger.service.models.Block;
+import pt.ulisboa.tecnico.hdsledger.service.models.Ledger;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
@@ -22,8 +22,6 @@ import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
-
-import javax.print.attribute.standard.JobMessageFromOperator;
 
 public class LedgerService implements UDPService {
 
@@ -44,14 +42,16 @@ public class LedgerService implements UDPService {
     private final Queue<LedgerRequest> mempool = new ConcurrentLinkedQueue<LedgerRequest>();
     // Block size
     private final int blockSize;
+    private Ledger ledger;
 
     public LedgerService(ProcessConfig[] clientConfigs, String nodeId, NodeService service, PerfectLink link,
-            int blockSize) {
+            int blockSize, Ledger ledger) {
         this.clientConfigs = clientConfigs;
         this.nodeId = nodeId;
         this.service = service;
         this.link = link;
         this.blockSize = blockSize;
+        this.ledger = ledger;
     }
 
     public Thread getThread() {
@@ -85,23 +85,26 @@ public class LedgerService implements UDPService {
     }
 
     public void createAccount(LedgerRequest request) {
-        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received LedgerRequestCreate from {1} - {2}", this.nodeId, request.getSenderId(), request));
+        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received LedgerRequestCreate from {1} - {2}", this.nodeId,
+                request.getSenderId(), request));
         if (!verifyClientSignature(request)) {
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Invalid Message Signature from {1} - {2}", this.nodeId, request.getSenderId(), request));
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Invalid Message Signature from {1} - {2}", this.nodeId,
+                    request.getSenderId(), request));
             // reply to client
         }
         mempool.add(request);
-        LOGGER.log(Level.INFO, MessageFormat.format("{0} - (mempool) Added message from {1} - {2}", this.nodeId, request.getSenderId(), request));
+        LOGGER.log(Level.INFO, MessageFormat.format("{0} - (mempool) Added message from {1} - {2}", this.nodeId,
+                request.getSenderId(), request));
 
         // Tecnicamente só os nao-lideres deviam dar set do timer
 
         Timer timer = new Timer();
         timer.schedule(new TimerTask() {
             @Override
-            public void run(){
+            public void run() {
                 System.out.println("Timer ran");
             }
-        }, 2*60*1000);
+        }, 2 * 60 * 1000);
     }
 
     public void transfer(LedgerRequest request) {
@@ -115,10 +118,10 @@ public class LedgerService implements UDPService {
         Timer timer = new Timer();
         timer.schedule(new TimerTask() {
             @Override
-            public void run(){
+            public void run() {
                 System.out.println("Timer ran");
             }
-        }, 2*60*1000);
+        }, 2 * 60 * 1000);
     }
 
     public void balance(LedgerRequest request) {
@@ -126,11 +129,23 @@ public class LedgerService implements UDPService {
         if (!verifyClientSignature(request)) {
             // reply to client
         }
-        // do weird consensus
+
+        LedgerRequestBalance balanceRequest = request.deserializeBalance();
+    
+        switch (balanceRequest.getConsistencyMode()) {
+            case STRONG -> {
+
+            }
+            case WEAK -> {
+                
+            }
+        }
     }
 
     private void checkBlockSize() {
-
+        // TODO: Remove requests from all nodes at the end
+        // of the consensus
+        // Maybe only leader should run this
         if (mempool.size() >= blockSize) {
             Block block = new Block();
             // Add blockSize transactions to block
