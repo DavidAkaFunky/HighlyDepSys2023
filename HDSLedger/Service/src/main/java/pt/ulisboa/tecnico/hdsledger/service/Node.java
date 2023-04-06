@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.service;
 
+import pt.ulisboa.tecnico.hdsledger.service.services.Mempool;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
@@ -55,7 +56,7 @@ public class Node {
 
             // Shared entities
             Ledger ledger = new Ledger();
-            Queue<LedgerRequest> mempool = new ConcurrentLinkedQueue<LedgerRequest>();
+            Mempool mempool = new Mempool(blockSize);
 
             // Services that implement listen from UDPService
             NodeService nodeService = new NodeService(clientConfigs, linkToNodes, nodeConfig, leaderConfig,

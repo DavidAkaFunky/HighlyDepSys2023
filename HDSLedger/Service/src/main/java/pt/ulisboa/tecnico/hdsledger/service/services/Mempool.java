@@ -17,6 +17,14 @@ public class Mempool {
         this.blocksize = blocksize;
     }
 
+
+    /*
+     * Check if mempool has enough transactions to create a block
+     * Only the leader tries to create blocks
+     * Note that the leader will remove transactions from the mempool
+     * but other nodes will not
+     * They will be removed when the block is added to the blockchain
+     */
     private Optional<Block> checkTransactionThreshold() {
         synchronized (this.pool) {
             if (this.pool.size() < this.blocksize) return Optional.empty();

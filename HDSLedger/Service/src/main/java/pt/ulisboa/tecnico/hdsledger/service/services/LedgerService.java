@@ -34,13 +34,13 @@ public class LedgerService implements UDPService {
     // Store accounts and signatures of updates to accounts
     private Ledger ledger;
     // Map of unconfirmed transactions
-    private final Queue<LedgerRequest> mempool;
+    private final Mempool mempool;
 
     // Thread to run service
     private Thread thread;
 
     public LedgerService(ProcessConfig[] clientConfigs, PerfectLink link, ProcessConfig config,
-            NodeService service, int blockSize, Ledger ledger, Queue<LedgerRequest> mempool) {
+            NodeService service, int blockSize, Ledger ledger, Mempool mempool) {
         this.clientConfigs = clientConfigs;
         this.link = link;
         this.config = config;
@@ -106,7 +106,7 @@ public class LedgerService implements UDPService {
             // TODO: reply to client
         }
 
-        mempool.add(request);
+        startConsensusIfBlock(mempool.add(request));
         setTimer();
     }
 
@@ -119,7 +119,7 @@ public class LedgerService implements UDPService {
             // TODO: reply to client
         }
 
-        mempool.add(request);
+        startConsensusIfBlock(mempool.add(request));
         setTimer();
     }
 
@@ -144,26 +144,12 @@ public class LedgerService implements UDPService {
         }
     }
 
-    /*
-     * Check if mempool has enough transactions to create a block
-     * Only the leader tries to create blocks
-     * Note that the leader will remove transactions from the mempool
-     * but other nodes will not
-     * They will be removed when the block is added to the blockchain
-     */
-    private void checkBlockSize() {
-        if (this.service.getConfig().isLeader()) {
-            if (mempool.size() >= blockSize) {
-                Block block = new Block();
-                // Add blockSize transactions to block
-                for (int i = 0; i < blockSize; i++) {
-                    block.addRequest(mempool.poll());
-                }
-                // Start consensus to add block to blockchain
-                service.startConsensus(block);
-            }
-        }
+    private void startConsensusIfBlock(Optional<Block> block) {
+        if (block.isEmpty()) return;
+        this.service.startConsensus(block.get());
     }
+
+
 
     @Override
     public void listen() {
@@ -216,8 +202,6 @@ public class LedgerService implements UDPService {
                                 }
                             }
 
-                            // After receiving a message try to create a block
-                            checkBlockSize();
 
                         }).start();
                     }

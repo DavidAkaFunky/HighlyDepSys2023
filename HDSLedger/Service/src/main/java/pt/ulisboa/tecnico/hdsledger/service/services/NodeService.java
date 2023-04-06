@@ -38,7 +38,7 @@ public class NodeService implements UDPService {
     // Store accounts and signatures of updates to accounts
     private Ledger ledger;
     // Map of unconfirmed transactions
-    private Queue<LedgerRequest> mempool;
+    private final Mempool mempool;
 
     // Current consensus instance
     private final AtomicInteger consensusInstance = new AtomicInteger(0);
@@ -50,7 +50,7 @@ public class NodeService implements UDPService {
     private final Map<Integer, Map<Integer, Boolean>> receivedPrePrepare = new ConcurrentHashMap<>();
 
     public NodeService(ProcessConfig[] clientsConfig, PerfectLink link, ProcessConfig config,
-            ProcessConfig leaderConfig, int nodesLength, Ledger ledger, Queue<LedgerRequest> mempool) {
+            ProcessConfig leaderConfig, int nodesLength, Ledger ledger, Mempool mempool) {
 
         this.clientsConfig = clientsConfig;
         this.link = link;
