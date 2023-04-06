@@ -84,7 +84,7 @@ public class Client {
                         continue;
                     }
                     System.out.println("Creating account...");
-                    library.create(clientId);
+                    library.create();
                 }
                 case "transfer" -> {
                     if (tokens.length != 4) {

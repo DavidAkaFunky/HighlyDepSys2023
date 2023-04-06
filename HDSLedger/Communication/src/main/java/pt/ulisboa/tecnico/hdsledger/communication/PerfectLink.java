@@ -99,7 +99,7 @@ public class PerfectLink {
      * @param n The number of nodes to send the message to
      */
     public void multicast(Message data, int n) {
-        List<String> nodeKeys = new ArrayList<String>(nodes.keySet());
+        List<String> nodeKeys = new ArrayList<>(nodes.keySet());
 
         if (n > nodeKeys.size())
             throw new LedgerException(ErrorMessage.NoLeader);
@@ -116,7 +116,7 @@ public class PerfectLink {
 
         // Select n random nodes
         Random random = new Random();
-        List<String> keys = new ArrayList<String>();
+        List<String> keys = new ArrayList<>();
         keys.add(leader.get().getKey());
 
         while (keys.size() < n) {

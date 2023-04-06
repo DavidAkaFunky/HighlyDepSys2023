@@ -61,5 +61,3 @@ while True:
     command = input(">> ")
     if command.strip() == "quit":
         quit_handler()
-
-

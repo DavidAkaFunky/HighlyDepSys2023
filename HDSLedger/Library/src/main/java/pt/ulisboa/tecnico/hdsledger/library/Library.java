@@ -85,20 +85,13 @@ public class Library {
      * 
      * @param accountId Account identifier
      */
-    public void create(String accountId) {
+    public void create() {
 
         int currentNonce = this.nonce.getAndIncrement();
 
-        // Get account public key
-        Optional<ProcessConfig> accountConfig = Arrays.stream(this.clientConfigs)
-                .filter(c -> c.getId().equals(accountId))
-                .findFirst();
-        if (accountConfig.isEmpty())
-            throw new LedgerException(ErrorMessage.InvalidAccount);
-
         PublicKey accountPubKey;
         try {
-            accountPubKey = RSAEncryption.readPublicKey(accountConfig.get().getPublicKeyPath());
+            accountPubKey = RSAEncryption.readPublicKey(this.config.getPublicKeyPath());
         } catch (Exception e) {
             throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
         }
@@ -106,16 +99,16 @@ public class Library {
         // Each LedgerRequest receives a specific ledger request which is serialized and
         // signed
         LedgerRequestCreate requestCreate = new LedgerRequestCreate(currentNonce, accountPubKey);
-        String requestTransferSerialized = new Gson().toJson(requestCreate);
+        String serializedCreateRequest = new Gson().toJson(requestCreate);
         String signature;
         try {
-            signature = RSAEncryption.sign(requestTransferSerialized, config.getPrivateKeyPath());
+            signature = RSAEncryption.sign(serializedCreateRequest, config.getPrivateKeyPath());
         } catch (Exception e) {
             throw new LedgerException(ErrorMessage.FailedToSignMessage);
         }
 
         // Send generic ledger request
-        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.CREATE, requestTransferSerialized,
+        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.CREATE, serializedCreateRequest,
                 signature);
 
         // Add to pending requests map
