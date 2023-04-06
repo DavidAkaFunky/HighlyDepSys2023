@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import os
 import json
 import sys
@@ -45,3 +47,12 @@ with open("Client/src/main/resources/client_config.json") as f:
             os.system(
                 f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {server_config} {debug_str}' ; sleep 500\"")
             sys.exit()
+
+while True:
+    print("Type quit to quit")
+    command = input(">> ")
+    if command.strip() == "quit":
+        os.system(f"pkill -i {terminal}")
+        break
+
+
