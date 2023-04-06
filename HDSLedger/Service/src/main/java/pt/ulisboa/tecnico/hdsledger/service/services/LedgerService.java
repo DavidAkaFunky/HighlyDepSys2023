@@ -1,8 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
-import com.google.gson.GsonBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.*;
-import pt.ulisboa.tecnico.hdsledger.service.models.Account;
 import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 import pt.ulisboa.tecnico.hdsledger.service.models.Ledger;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -14,13 +12,10 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.logging.Level;
 import java.util.Arrays;
-import java.util.Map;
 import java.util.Queue;
 import java.util.Optional;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
 public class LedgerService implements UDPService {
@@ -28,30 +23,32 @@ public class LedgerService implements UDPService {
     private static final CustomLogger LOGGER = new CustomLogger(LedgerService.class.getName());
     // Clients configurations
     private final ProcessConfig[] clientConfigs;
-    // Node identifier
-    private final String nodeId;
-    // Node service
-    private final NodeService service;
     // Link to communicate with blockchain nodes
     private final PerfectLink link;
+    // Node configuration
+    private final ProcessConfig config;
+    // Node service that provides consensus interface
+    private final NodeService service;
+    // Number of transactions per block
+    private final int blockSize;
+    // Store accounts and signatures of updates to accounts
+    private Ledger ledger;
+    // Map of unconfirmed transactions
+    private final Queue<LedgerRequest> mempool;
+
     // Thread to run service
     private Thread thread;
-    // Accounts
-    private final Map<String, Account> accounts = new ConcurrentHashMap<>();
-    // Map of unconfirmed transactions
-    private final Queue<LedgerRequest> mempool = new ConcurrentLinkedQueue<LedgerRequest>();
-    // Block size
-    private final int blockSize;
-    private Ledger ledger;
 
-    public LedgerService(ProcessConfig[] clientConfigs, String nodeId, NodeService service, PerfectLink link,
-            int blockSize, Ledger ledger) {
+    public LedgerService(ProcessConfig[] clientConfigs, PerfectLink link, ProcessConfig config,
+            NodeService service, int blockSize, Ledger ledger, Queue<LedgerRequest> mempool) {
         this.clientConfigs = clientConfigs;
-        this.nodeId = nodeId;
-        this.service = service;
         this.link = link;
+        this.config = config;
+        this.service = service;
         this.blockSize = blockSize;
+
         this.ledger = ledger;
+        this.mempool = mempool;
     }
 
     public Thread getThread() {
@@ -84,20 +81,13 @@ public class LedgerService implements UDPService {
         return false;
     }
 
-    public void createAccount(LedgerRequest request) {
-        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received LedgerRequestCreate from {1} - {2}", this.nodeId,
-                request.getSenderId(), request));
-        if (!verifyClientSignature(request)) {
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Invalid Message Signature from {1} - {2}", this.nodeId,
-                    request.getSenderId(), request));
-            // reply to client
-        }
-        mempool.add(request);
-        LOGGER.log(Level.INFO, MessageFormat.format("{0} - (mempool) Added message from {1} - {2}", this.nodeId,
-                request.getSenderId(), request));
+    private void setTimer() {
+        // Only non-leader nodes set the timer since leader will be the one
+        // creating blocks with received transactions
+        if (!this.config.isLeader())
+            return;
 
-        // Tecnicamente só os nao-lideres deviam dar set do timer
-
+        // Should be a map <transactionId -> timer>
         Timer timer = new Timer();
         timer.schedule(new TimerTask() {
             @Override
@@ -105,55 +95,73 @@ public class LedgerService implements UDPService {
                 System.out.println("Timer ran");
             }
         }, 2 * 60 * 1000);
+    }
+
+    public void createAccount(LedgerRequest request) {
+        LOGGER.log(Level.INFO,
+                MessageFormat.format("{0} - Received LedgerRequestCreate from {1} - {2}", this.config.getId(),
+                        request.getSenderId(), request));
+
+        if (!verifyClientSignature(request)) {
+            // TODO: reply to client
+        }
+
+        mempool.add(request);
+        setTimer();
     }
 
     public void transfer(LedgerRequest request) {
+        LOGGER.log(Level.INFO,
+                MessageFormat.format("{0} - Received LedgerRequestTransfer from {1} - {2}", this.config.getId(),
+                        request.getSenderId(), request));
+
         if (!verifyClientSignature(request)) {
-            // reply to client
+            // TODO: reply to client
         }
+
         mempool.add(request);
-
-        // Tecnicamente só os nao-lideres deviam dar set do timer
-
-        Timer timer = new Timer();
-        timer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                System.out.println("Timer ran");
-            }
-        }, 2 * 60 * 1000);
+        setTimer();
     }
 
     public void balance(LedgerRequest request) {
-        System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(accounts));
+        LOGGER.log(Level.INFO,
+                MessageFormat.format("{0} - Received LedgerRequestBalance from {1} - {2}", this.config.getId(),
+                        request.getSenderId(), request));
+
         if (!verifyClientSignature(request)) {
-            // reply to client
+            // TODO: reply to client
         }
 
         LedgerRequestBalance balanceRequest = request.deserializeBalance();
-    
+
         switch (balanceRequest.getConsistencyMode()) {
             case STRONG -> {
 
             }
             case WEAK -> {
-                
+
             }
         }
     }
 
+    /*
+     * Check if mempool has enough transactions to create a block
+     * Only the leader tries to create blocks
+     * Note that the leader will remove transactions from the mempool
+     * but other nodes will not
+     * They will be removed when the block is added to the blockchain
+     */
     private void checkBlockSize() {
-        // TODO: Remove requests from all nodes at the end
-        // of the consensus
-        // Maybe only leader should run this
-        if (mempool.size() >= blockSize) {
-            Block block = new Block();
-            // Add blockSize transactions to block
-            for (int i = 0; i < blockSize; i++) {
-                block.addRequest(mempool.poll());
+        if (this.service.getConfig().isLeader()) {
+            if (mempool.size() >= blockSize) {
+                Block block = new Block();
+                // Add blockSize transactions to block
+                for (int i = 0; i < blockSize; i++) {
+                    block.addRequest(mempool.poll());
+                }
+                // Start consensus to add block to blockchain
+                service.startConsensus(block);
             }
-            // Start consensus to add block to blockchain
-            service.startConsensus(block);
         }
     }
 
@@ -178,41 +186,35 @@ public class LedgerService implements UDPService {
                                 case CREATE -> {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received CREATE message from {1}",
-                                                    nodeId, message.getSenderId()));
+                                                    this.config.getId(), message.getSenderId()));
                                     createAccount((LedgerRequest) message);
                                 }
                                 case TRANSFER -> {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received TRANSFER message from {1}",
-                                                    nodeId, message.getSenderId()));
+                                                    this.config.getId(), message.getSenderId()));
                                     transfer((LedgerRequest) message);
                                 }
                                 case BALANCE -> {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received BALANCE message from {1}",
-                                                    nodeId, message.getSenderId()));
+                                                    this.config.getId(), message.getSenderId()));
                                     balance((LedgerRequest) message);
                                 }
                                 case ACK -> {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received ACK message from {1}",
-                                                    nodeId, message.getSenderId()));
+                                                    this.config.getId(), message.getSenderId()));
                                 }
                                 case IGNORE -> {
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received IGNORE message from {1}",
-                                                    nodeId, message.getSenderId()));
+                                                    this.config.getId(), message.getSenderId()));
                                 }
                                 default -> {
                                     throw new LedgerException(ErrorMessage.CannotParseMessage);
                                 }
                             }
-
-                            if (response.isEmpty())
-                                return;
-
-                            // Reply to a specific client
-                            link.send(message.getSenderId(), response.get());
 
                             // After receiving a message try to create a block
                             checkBlockSize();

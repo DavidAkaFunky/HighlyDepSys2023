@@ -23,32 +23,49 @@ public class NodeService implements UDPService {
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
     // Blockchain
     private final Map<Integer, Block> blockchain = new ConcurrentHashMap<>();
-    private Ledger ledger;
+    // Clients configurations
+    private final ProcessConfig[] clientsConfig;
+    // Link to communicate with blockchain nodes
+    private final PerfectLink link;
+    // Current node is leader
+    private final ProcessConfig config;
+    // Leader configuration
+    private final ProcessConfig leaderConfig;
     // Consensus instance -> Round -> List of prepare messages
     private final MessageBucket prepareMessages;
     // Consensus instance -> Round -> List of commit messages
     private final MessageBucket commitMessages;
-    private final ProcessConfig[] clientsConfig;
-    // Current node is leader
-    private final ProcessConfig config;
-    // Consensus info
+    // Store accounts and signatures of updates to accounts
+    private Ledger ledger;
+    // Map of unconfirmed transactions
+    private Queue<LedgerRequest> mempool;
+
+    // Current consensus instance
     private final AtomicInteger consensusInstance = new AtomicInteger(0);
+    // Last decided consensus instance
     private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(0);
-
+    // Consensus instance information per consensus instance
     private final Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
+    // Store if already received pre-prepare for a given <consensus, round>
     private final Map<Integer, Map<Integer, Boolean>> receivedPrePrepare = new ConcurrentHashMap<>();
-    private final ProcessConfig leaderConfig;
-    private final PerfectLink link;
 
-    public NodeService(ProcessConfig[] clientsConfig, ProcessConfig config, PerfectLink link,
-            ProcessConfig leaderConfig, int nodesLength, Ledger ledger) {
+    public NodeService(ProcessConfig[] clientsConfig, PerfectLink link, ProcessConfig config,
+            ProcessConfig leaderConfig, int nodesLength, Ledger ledger, Queue<LedgerRequest> mempool) {
+
         this.clientsConfig = clientsConfig;
-        this.config = config;
         this.link = link;
+        this.config = config;
         this.leaderConfig = leaderConfig;
+
+        this.ledger = ledger;
+        this.mempool = mempool;
+
         this.prepareMessages = new MessageBucket(nodesLength);
         this.commitMessages = new MessageBucket(nodesLength);
-        this.ledger = ledger;
+    }
+
+    public ProcessConfig getConfig() {
+        return this.config;
     }
 
     /*
@@ -166,7 +183,7 @@ public class NodeService implements UDPService {
     }
 
     /*
-     *  Verify if a block was signed by the leader
+     * Verify if a block was signed by the leader
      */
     private boolean checkIfSignedByLeader(String block, String leaderMessage, String errorLog) {
         if (this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.NONE
@@ -227,7 +244,7 @@ public class NodeService implements UDPService {
 
         // Only start a consensus instance if the last one was decided
         // We need to be sure that the previous block has been decided
-        // RIP Multi-paxos :'-( 
+        // RIP Multi-paxos :'-(
         while (lastDecidedConsensusInstance.get() < localConsensusInstance - 1) {
             try {
                 Thread.sleep(1000);
@@ -551,7 +568,8 @@ public class NodeService implements UDPService {
             instance.setCommittedRound(round);
 
             // They are all the same, so we can just get the first one
-            Map<String, UpdateAccount> accountUpdates = commitQuorum.get().get(0).deserializeCommitMessage().getUpdateAccountSignatures();
+            Map<String, UpdateAccount> accountUpdates = commitQuorum.get().get(0).deserializeCommitMessage()
+                    .getUpdateAccountSignatures();
 
             boolean successfulAdd = accountUpdates.size() > 0;
 
@@ -564,10 +582,11 @@ public class NodeService implements UDPService {
                     updates.entrySet().stream().forEach((entry) -> {
                         String signature = entry.getKey();
                         UpdateAccount accountUpdate = entry.getValue();
-                        this.ledger.addAccountUpdateSignature(consensusInstance, accountUpdate.getHashPubKey(), signerId, signature);
+                        this.ledger.addAccountUpdateSignature(consensusInstance, accountUpdate.getHashPubKey(),
+                                signerId, signature);
                     });
                 });
-                
+
                 // Apply temporary transactions to account and append block to blockchain
                 this.ledger.commitTransactions(consensusInstance);
                 this.blockchain.put(consensusInstance, instance.getPreparedBlock());
