@@ -20,7 +20,8 @@ public class Client {
         System.out.println("Welcome to the HDS Ledger Client!");
         System.out.println("Your client ID is: " + clientId);
         System.out.println("Type 'create' to create an account.");
-        System.out.println("Type 'transfer <source_id> <destination_id> <amount>' to transfer a given amount from one account to another.");
+        System.out.println(
+                "Type 'transfer <source_id> <destination_id> <amount>' to transfer a given amount from one account to another.");
         System.out.println("Type 'balance <account_id> <strong|weak>' to read the current account balance.");
         System.out.println("Type 'exit' to exit the program.\n");
     }
@@ -98,6 +99,10 @@ public class Client {
                 case "balance" -> {
                     if (tokens.length != 3) {
                         System.out.println("Invalid number of arguments for read command.");
+                        continue;
+                    }
+                    if (!tokens[2].equals("strong") && !tokens[2].equals("weak")) {
+                        System.out.println("Invalid consistency mode. Use 'strong' or 'weak'.");
                         continue;
                     }
                     String accountId = tokens[1];
