@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
+
 import java.math.BigDecimal;
 import java.security.PublicKey;
 
@@ -8,16 +10,16 @@ public class LedgerRequestTransfer {
     // Client nonce
     private int nonce;
     // Source Public Key
-    private PublicKey sourcePubKey;
+    private String sourcePubKey;
     // Destination Public Key
-    private PublicKey destinationPubKey;
+    private String destinationPubKey;
     // Amount to transfer
     private BigDecimal amount;
 
     public LedgerRequestTransfer(int nonce, PublicKey sourcePubKey, PublicKey destinationPubKey, BigDecimal amount) {
         this.nonce = nonce;
-        this.sourcePubKey = sourcePubKey;
-        this.destinationPubKey = destinationPubKey;
+        this.sourcePubKey = RSAEncryption.encodePublicKey(sourcePubKey);
+        this.destinationPubKey = RSAEncryption.encodePublicKey(destinationPubKey);
         this.amount = amount;
     }
 
@@ -30,19 +32,19 @@ public class LedgerRequestTransfer {
     }
 
     public PublicKey getSourcePubKey() {
-        return sourcePubKey;
+        return RSAEncryption.decodePublicKey(this.sourcePubKey);
     }
 
     public void setSourcePubKey(PublicKey sourcePubKey) {
-        this.sourcePubKey = sourcePubKey;
+        this.sourcePubKey = RSAEncryption.encodePublicKey(sourcePubKey);
     }
 
     public PublicKey getDestinationPubKey() {
-        return destinationPubKey;
+        return RSAEncryption.decodePublicKey(this.destinationPubKey);
     }
 
     public void setDestinationPubKey(PublicKey destinationPubKey) {
-        this.destinationPubKey = destinationPubKey;
+        this.destinationPubKey = RSAEncryption.encodePublicKey(destinationPubKey);
     }
 
     public BigDecimal getAmount() {

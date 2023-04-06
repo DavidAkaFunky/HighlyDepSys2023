@@ -31,6 +31,20 @@ public class RSAEncryption {
         return content;
     }
 
+    public static String encodePublicKey(PublicKey key) {
+        return Base64.getEncoder().encodeToString(key.getEncoded());
+    }
+
+    public static PublicKey decodePublicKey(String key) {
+        byte[] keyBytes = Base64.getDecoder().decode(key);
+        try {
+            return KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(keyBytes));
+        } catch(Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
     public static PublicKey readPublicKey(String publicKeyPath)
             throws FileNotFoundException, IOException, NoSuchAlgorithmException, InvalidKeySpecException {
 

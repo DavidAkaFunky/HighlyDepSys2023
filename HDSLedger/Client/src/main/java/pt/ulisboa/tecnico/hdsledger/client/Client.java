@@ -8,7 +8,6 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
 
@@ -20,10 +19,10 @@ public class Client {
     private static void welcomeText(String clientId) {
         System.out.println("Welcome to the HDS Ledger Client!");
         System.out.println("Your client ID is: " + clientId);
-        System.out.println("Type 'create <account_id>' to create an account.");
+        System.out.println("Type 'create' to create an account.");
         System.out.println("Type 'transfer <source_id> <destination_id> <amount>' to transfer a given amount from one account to another.");
         System.out.println("Type 'balance <account_id> <strong|weak>' to read the current account balance.");
-        System.out.println("Type 'exit' to exit the program.");
+        System.out.println("Type 'exit' to exit the program.\n");
     }
 
     public static void main(String[] args) {
@@ -63,7 +62,10 @@ public class Client {
         final Scanner scanner = new Scanner(System.in);
 
         String line = "";
+        String prompt = String.format("[%s @ HDSLedger]$ ", clientId);
         while (true) {
+
+            System.out.print(prompt);
             line = scanner.nextLine();
 
             // Empty command
@@ -75,13 +77,12 @@ public class Client {
 
             switch (tokens[0]) {
                 case "create" -> {
-                    if (tokens.length != 2) {
+                    if (tokens.length != 1) {
                         System.out.println("Invalid number of arguments for create command.");
                         continue;
                     }
-                    String accountId = tokens[1];
                     System.out.println("Creating account...");
-                    library.create(accountId);
+                    library.create(clientId);
                 }
                 case "transfer" -> {
                     if (tokens.length != 4) {

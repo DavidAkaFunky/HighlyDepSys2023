@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
+
 import java.security.PublicKey;
 
 public class LedgerRequestCreate {
@@ -7,11 +9,11 @@ public class LedgerRequestCreate {
     // Client nonce
     private int nonce;
     // Account Public Key
-    private PublicKey accountPubKey;
+    private String accountPubKey;
 
     public LedgerRequestCreate(int nonce, PublicKey accountPubKey) {
         this.nonce = nonce;
-        this.accountPubKey = accountPubKey;
+        this.accountPubKey = RSAEncryption.encodePublicKey(accountPubKey);
     }
 
     public int getNonce() {
@@ -23,10 +25,10 @@ public class LedgerRequestCreate {
     }
 
     public PublicKey getAccountPubKey() {
-        return accountPubKey;
+        return RSAEncryption.decodePublicKey(this.accountPubKey);
     }
 
     public void setAccountPubKey(PublicKey accountPubKey) {
-        this.accountPubKey = accountPubKey;
+        this.accountPubKey = RSAEncryption.encodePublicKey(accountPubKey);
     }
 }

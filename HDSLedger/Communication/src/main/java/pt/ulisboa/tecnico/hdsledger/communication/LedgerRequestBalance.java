@@ -1,25 +1,27 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
+
 import java.security.PublicKey;
 
 public class LedgerRequestBalance {
 
     // Account Public Key
-    private PublicKey accountPubKey;
+    private String accountPubKey;
     // Consistency mode
     private String consistencyMode;
 
     public LedgerRequestBalance(PublicKey accountPubKey, String consistencyMode) {
-        this.accountPubKey = accountPubKey;
+        this.accountPubKey = RSAEncryption.encodePublicKey(accountPubKey);
         this.consistencyMode = consistencyMode;
     }
 
     public PublicKey getAccountPubKey() {
-        return accountPubKey;
+        return RSAEncryption.decodePublicKey(this.accountPubKey);
     }
 
     public void setAccountPubKey(PublicKey accountPubKey) {
-        this.accountPubKey = accountPubKey;
+        this.accountPubKey = RSAEncryption.encodePublicKey(accountPubKey);
     }
 
     public String getConsistencyMode() {

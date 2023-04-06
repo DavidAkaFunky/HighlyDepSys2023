@@ -12,6 +12,7 @@ public class CustomLogger {
 
     public CustomLogger(String name) {
         LOGGER = Logger.getLogger(name);
+        LOGGER.setLevel(Level.ALL);
         LOGGER.setUseParentHandlers(false);
         ConsoleHandler handler = new ConsoleHandler();
 

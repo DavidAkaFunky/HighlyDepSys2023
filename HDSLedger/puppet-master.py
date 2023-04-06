@@ -3,6 +3,8 @@
 import os
 import json
 import sys
+import signal
+
 
 # Debug flag for client process
 debug = True
@@ -20,7 +22,11 @@ server_configs = [
     "bad_consensus_config.json",
 ]
 server_config = server_configs[0]
-block_size = 5
+block_size = 1
+
+def quit_handler(*args):
+    os.system(f"pkill -i {terminal}")
+    sys.exit()
 
 # Compile classes
 os.system("mvn clean install")
@@ -48,11 +54,12 @@ with open("Client/src/main/resources/client_config.json") as f:
                 f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {server_config} {debug_str}' ; sleep 500\"")
             sys.exit()
 
+signal.signal(signal.SIGINT, quit_handler)
+
 while True:
     print("Type quit to quit")
     command = input(">> ")
     if command.strip() == "quit":
-        os.system(f"pkill -i {terminal}")
-        break
+        quit_handler()
 
 

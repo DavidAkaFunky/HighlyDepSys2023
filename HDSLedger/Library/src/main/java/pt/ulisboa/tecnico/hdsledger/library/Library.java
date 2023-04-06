@@ -98,7 +98,7 @@ public class Library {
         }
 
         // Send generic ledger request with signature
-        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.TRANSFER, requestTransferSerialized,
+        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.CREATE, requestTransferSerialized,
                 signature);
 
         this.link.smallQuorumMulticast(request);

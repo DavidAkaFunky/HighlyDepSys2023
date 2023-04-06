@@ -1,9 +1,8 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
-import pt.ulisboa.tecnico.hdsledger.communication.LedgerResponse;
-import pt.ulisboa.tecnico.hdsledger.communication.Message;
-import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.service.models.Account;
 import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -23,6 +22,8 @@ import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
+
+import javax.print.attribute.standard.JobMessageFromOperator;
 
 public class LedgerService implements UDPService {
 
@@ -84,11 +85,14 @@ public class LedgerService implements UDPService {
     }
 
     public void createAccount(LedgerRequest request) {
+        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received LedgerRequestCreate from {1} - {2}", this.nodeId, request.getSenderId(), request));
         if (!verifyClientSignature(request)) {
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Invalid Message Signature from {1} - {2}", this.nodeId, request.getSenderId(), request));
             // reply to client
         }
         mempool.add(request);
-        
+        LOGGER.log(Level.INFO, MessageFormat.format("{0} - (mempool) Added message from {1} - {2}", this.nodeId, request.getSenderId(), request));
+
         // Tecnicamente só os nao-lideres deviam dar set do timer
 
         Timer timer = new Timer();
@@ -118,6 +122,7 @@ public class LedgerService implements UDPService {
     }
 
     public void balance(LedgerRequest request) {
+        System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(accounts));
         if (!verifyClientSignature(request)) {
             // reply to client
         }
@@ -156,12 +161,21 @@ public class LedgerService implements UDPService {
                             Optional<LedgerResponse> response = Optional.empty();
                             switch (message.getType()) {
                                 case CREATE -> {
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received CREATE message from {1}",
+                                                    nodeId, message.getSenderId()));
                                     createAccount((LedgerRequest) message);
                                 }
                                 case TRANSFER -> {
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received TRANSFER message from {1}",
+                                                    nodeId, message.getSenderId()));
                                     transfer((LedgerRequest) message);
                                 }
                                 case BALANCE -> {
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Received BALANCE message from {1}",
+                                                    nodeId, message.getSenderId()));
                                     balance((LedgerRequest) message);
                                 }
                                 case ACK -> {
