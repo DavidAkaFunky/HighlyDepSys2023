@@ -149,7 +149,7 @@ Certificates can be storage can be offloaded to a CDN such as cloudflare or s3
 
 Problem:
 Unbounded memory to store all messages (for acks)
-Prevent DOS from byzantine nodes
+Prevent DoS from byzantine nodes
 Avoid perfect point-to-point channels
 
 Solution:
@@ -171,8 +171,79 @@ Storage is bounded by the time it takes to advance a round
 
 # 4.2 Scale-Out Validators
 
-Main Ideia:
+Problem:
+Mempools (Narwhal included) face bottlenecks like bandwidth, storage and processing capabilities of a validator
+
+Solution:
 Use many computers per validator to not be limited by the resources of a single machine
 
-...
+Structure: Primary-worker
+- Split protocol messages into transaction data and metadata
+- Load balancer ensures transactions data are received by all workers at a similar rate
+- Worker creates a batch of transactions, sends it to the worker node of each of the other validators and waits for quorum of acks
+- Primary runs Narwhal, but instead of including transactions into a block, includes cryptographic hashes of its own worker batches
+- A primary only signs a block if the batches included have been stored by its own workers
+- Seek missing batches via a pull mechanism: upon receiving a block that contains such a batch, the primary instructs its worker to pull the batch directly from the associated worker of the creator of the block
 
+Theoretical bottleneck: Size of primary blocks
+- Never reached in practical tests
+- More efficient accumulator: e.g., Merkle Tree root batch hashes
+
+# 5 Tusk asynchronous consensus
+
+Tusk validators operate a Narwhal mempool, but also include in each of their blocks information to generate a distributed perfect random coin
+
+DAG interpretation:
+- Every validator locally interprets its local view of the DAG and use the shared randomness to determine the total order
+- Division into waves, each of which consisting of 3 consecutive rounds:
+    - Each validator proposes its block (and consequently all its causal history)
+    - Each validator votes on the proposals by including them in their block
+    - Produce randomness to elect one random leader’s block in retrospect
+- After revealing the coin, each validator 𝑣 commits the elected leader block 𝑏 of a wave 𝑤 if there are 𝑓 +1 blocks in the second round of 𝑤 (in 𝑣’s local view of the DAG) that refer to 𝑏
+- 𝑣 then carefully orders 𝑏’s causal history up to the garbage collection point
+- After committing the leader in a wave 𝑤, 𝑣 sets it to be the next candidate to be ordered and recursively go back to the last wave 𝑤' in which it committed a leader
+
+# 5.1 Safety intuition
+
+- Each round in the DAG contains of at least 2𝑓 +1 blocks
+- Corollary: If an honest validator commits a leader block 𝑏 in an wave 𝑖, then any leader block 𝑏′ committed by any honest validator 𝑣 in a future wave have a path to 𝑏 in 𝑣’s local DAG.
+- The recursive system ensures that: Any two honest validators commit the same sequence of block leaders.
+- After ordering a block leader, each validator orders the leader’s causal history by some pre-defined deterministic rule
+    - Coupled with containment, all honest validators agree on the total order of the DAG’s blocks.
+
+# 5.2 Liveness and latency
+
+- Liveness
+    - For every wave 𝑤 there are at least 𝑓+1 blocks in the first round of 𝑤 that satisfy the commit rule.
+    - To guarantee liveness against an adaptive asynchronous adversary, use the randomness produced in the third round of a wave to determine the wave’s block leader
+    - So, the adversary learns who is the block leader of a wave only after the first two rounds of the wave are fixed
+    - Thus, the 𝑓 +1 blocks that satisfy the commit rule are determined before the adversary learns the block leader.
+    - As such, the probability to commit a block leader in each wave is at least 𝑓 +1 3𝑓 +1 >1/3 even if the adversary fully controls the network
+- Latency
+    - In expectation, Tusk commits a block leader every 7 rounds in the DAG under an asynchronous adversary.
+        - (Add proof)
+    - In networks with random message delays, in expectation, Tusk commits each block in the DAG in 4.5 rounds
+        - (Add proof)
+        
+# 6 Implementation
+
+Networked multi-core Narwhal validator in Rust
+- Tokio for asynchronous networking
+- ed25519-dalek for elliptic curve based signatures
+
+RocksDB for data structures
+
+TCP to achieve reliable point-to-point channels
+- Keep a list of messages to be sent between peers in memory and attempt to send them through persistent TCP channels to other peers
+- In case TCP channels are drooped (i.e. broken), attempt to re-establish them and attempt again to send stored messages
+- Eventually, the primary or worker logic establishes that a message is no more needed to make progress, and it is removed from memory and not re-sent
+    - This ensures that the number of messages to unavailable peers does not become unbounded and a vector for DoS
+
+Custom implementation of Hotstuff
+- Add persistent storage in the nodes (since we are building a fault-tolerant system)
+- Evaluate it in a WAN (wide-area network)
+- Implement the pacemaker module that is abstracted away following the LibraBFT specification
+- Two versions of "baseline-HS":
+    - Standard, using plain gossip
+    - State-of-the-art, having validators batching transactions and sending them out of the critical path.
+        - Goal: Show that this solution already gives benefits in a stable network but is not robust enough for a real deployment.
