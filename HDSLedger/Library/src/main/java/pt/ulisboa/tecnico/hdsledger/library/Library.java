@@ -46,7 +46,8 @@ public class Library {
         this(clientConfig, nodeConfigs, clientConfigs, true);
     }
 
-    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, ProcessConfig[] clientConfigs, boolean activateLogs) throws LedgerException {
+    public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, ProcessConfig[] clientConfigs,
+            boolean activateLogs) throws LedgerException {
 
         this.nodeConfigs = nodeConfigs;
         this.clientConfigs = clientConfigs;
@@ -59,7 +60,8 @@ public class Library {
         this.leader = leader.get();
 
         // Create link to communicate with nodes
-        this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class, activateLogs);
+        this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class,
+                activateLogs, 1000);
 
         // Disable logs if necessary
         if (!activateLogs) {
@@ -99,7 +101,8 @@ public class Library {
         }
 
         // Send generic ledger request
-        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.CREATE, serializedCreateRequest, signature);
+        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.CREATE, serializedCreateRequest,
+                signature);
 
         // Add to pending requests map
         this.requests.put(currentNonce, request);
@@ -120,7 +123,8 @@ public class Library {
         int currentNonce = this.nonce.getAndIncrement();
 
         // Get account public key
-        Optional<ProcessConfig> accountConfig = Arrays.stream(this.clientConfigs).filter(c -> c.getId().equals(accountId)).findFirst();
+        Optional<ProcessConfig> accountConfig = Arrays.stream(this.clientConfigs)
+                .filter(c -> c.getId().equals(accountId)).findFirst();
         if (accountConfig.isEmpty())
             throw new LedgerException(ErrorMessage.InvalidAccount);
         PublicKey accountPubKey;
@@ -132,7 +136,8 @@ public class Library {
 
         // Each LedgerRequest receives a specific ledger request which is serialized and
         // signed
-        LedgerRequestBalance requestRead = new LedgerRequestBalance(accountPubKey, consistencyMode, this.knownConsensusInstance);
+        LedgerRequestBalance requestRead = new LedgerRequestBalance(accountPubKey, consistencyMode,
+                this.knownConsensusInstance);
         String requestTransferSerialized = new Gson().toJson(requestRead);
         String signature;
         try {
@@ -142,7 +147,8 @@ public class Library {
         }
 
         // Send generic ledger request
-        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.BALANCE, requestTransferSerialized, signature);
+        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.BALANCE, requestTransferSerialized,
+                signature);
 
         // Add to pending requests map
         this.requests.put(currentNonce, request);
@@ -165,8 +171,10 @@ public class Library {
         int currentNonce = this.nonce.getAndIncrement();
 
         // Get source and destination public keys
-        Optional<ProcessConfig> sourceConfig = Arrays.stream(this.clientConfigs).filter(c -> c.getId().equals(sourceId)).findFirst();
-        Optional<ProcessConfig> destinationConfig = Arrays.stream(this.clientConfigs).filter(c -> c.getId().equals(destinationId)).findFirst();
+        Optional<ProcessConfig> sourceConfig = Arrays.stream(this.clientConfigs).filter(c -> c.getId().equals(sourceId))
+                .findFirst();
+        Optional<ProcessConfig> destinationConfig = Arrays.stream(this.clientConfigs)
+                .filter(c -> c.getId().equals(destinationId)).findFirst();
         if (sourceConfig.isEmpty() || destinationConfig.isEmpty())
             throw new LedgerException(ErrorMessage.InvalidAccount);
         PublicKey sourcePubKey, destinationPubKey;
@@ -179,7 +187,8 @@ public class Library {
 
         // Each LedgerRequest receives a specific ledger request which is serialized and
         // signed
-        LedgerRequestTransfer requestTransfer = new LedgerRequestTransfer(currentNonce, sourcePubKey, destinationPubKey, amount);
+        LedgerRequestTransfer requestTransfer = new LedgerRequestTransfer(currentNonce, sourcePubKey, destinationPubKey,
+                amount);
         String requestTransferSerialized = new Gson().toJson(requestTransfer);
         String signature;
         try {
@@ -189,7 +198,8 @@ public class Library {
         }
 
         // Send generic ledger request
-        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.TRANSFER, requestTransferSerialized, signature);
+        LedgerRequest request = new LedgerRequest(this.config.getId(), Message.Type.TRANSFER, requestTransferSerialized,
+                signature);
 
         // Add to pending requests map
         this.requests.put(currentNonce, request);
@@ -212,13 +222,16 @@ public class Library {
         String accountUpdateSerialized = new Gson().toJson(response.getUpdateAccount());
         for (var signature : response.getSignatures().entrySet()) {
             // Find public key of node that signed the response
-            Optional<ProcessConfig> nodeConfig = Arrays.stream(this.nodeConfigs).filter(c -> c.getId().equals(signature.getKey())).findFirst();
+            Optional<ProcessConfig> nodeConfig = Arrays.stream(this.nodeConfigs)
+                    .filter(c -> c.getId().equals(signature.getKey())).findFirst();
 
-            if (nodeConfig.isEmpty()) return false;
+            if (nodeConfig.isEmpty())
+                return false;
 
             // Verify signature
             try {
-                if (!RSAEncryption.verifySignature(accountUpdateSerialized, signature.getValue(), nodeConfig.get().getPublicKeyPath()))
+                if (!RSAEncryption.verifySignature(accountUpdateSerialized, signature.getValue(),
+                        nodeConfig.get().getPublicKeyPath()))
                     return false;
             } catch (Exception e) {
                 return false;
@@ -238,12 +251,16 @@ public class Library {
                         // Separate thread to handle each message
                         if (message.getType() == Message.Type.ACK) {
                             // qualquer coisa
-                            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK {1} message from {2}", config.getId(), message.getMessageId(), message.getSenderId()));
+                            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK {1} message from {2}",
+                                    config.getId(), message.getMessageId(), message.getSenderId()));
                             return;
                         } else if (message.getType() != Message.Type.REPLY) {
+                            LOGGER.log(Level.INFO,
+                                    MessageFormat.format("{} - AQUIIIIIIIIIIIIIIIIIIIIIII", config.getId()));
                             throw new LedgerException(ErrorMessage.CannotParseMessage);
                         }
-                        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received REPLY message from {1}", config.getId(), message.getSenderId()));
+                        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received REPLY message from {1}",
+                                config.getId(), message.getSenderId()));
 
                         LedgerResponse response = (LedgerResponse) message;
                         System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(response));
@@ -254,7 +271,8 @@ public class Library {
                             LedgerRequest request = this.requests.get(nonce);
 
                             // If request is not present, it means that it was already processed
-                            if (request == null) continue;
+                            if (request == null)
+                                continue;
 
                             // Add response to corresponding nonce
                             this.responses.putIfAbsent(nonce, new ArrayList<>());
@@ -264,7 +282,8 @@ public class Library {
                             switch (request.getType()) {
                                 case CREATE, TRANSFER -> {
                                     // Wait for f+1 responses
-                                    if (ledgerResponses.size() < this.smallQuorumSize) break;
+                                    if (ledgerResponses.size() < this.smallQuorumSize)
+                                        break;
                                     // Remove processed messages
                                     // One LedgerResponse may be a reply to multiple requests
                                     ledgerResponses
@@ -275,19 +294,27 @@ public class Library {
                                             .getUpdateAccount()
                                             .getNonces()
                                             .forEach(n -> {
-                                        this.requests.remove(n);
-                                        this.responses.remove(n);
-                                    });
+                                                this.requests.remove(n);
+                                                this.responses.remove(n);
+                                            });
 
                                     if (request.getType() == Message.Type.CREATE)
-                                        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Account {1} was created with balance {2}", config.getId(), request.getSenderId(), response.getUpdateAccount().getUpdatedBalance()));
+                                        LOGGER.log(Level.INFO,
+                                                MessageFormat.format("{0} - Account {1} was created with balance {2}",
+                                                        config.getId(), request.getSenderId(),
+                                                        response.getUpdateAccount().getUpdatedBalance()));
                                     else
-                                        LOGGER.log(Level.INFO, MessageFormat.format("{0} - Transfer from {1} to {2} was successful. Current balance is {3}", config.getId(), request.getSenderId(), response.getUpdateAccount().getUpdatedBalance(), response.getUpdateAccount().getUpdatedBalance()));
+                                        LOGGER.log(Level.INFO, MessageFormat.format(
+                                                "{0} - Transfer from {1} to {2} was successful. Current balance is {3}",
+                                                config.getId(), request.getSenderId(),
+                                                response.getUpdateAccount().getUpdatedBalance(),
+                                                response.getUpdateAccount().getUpdatedBalance()));
                                     this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
                                 }
                                 case BALANCE -> {
 
-                                    LedgerRequestBalance requestBalance = new Gson().fromJson(request.getMessage(), LedgerRequestBalance.class);
+                                    LedgerRequestBalance requestBalance = new Gson().fromJson(request.getMessage(),
+                                            LedgerRequestBalance.class);
 
                                     // Soft -> wait for 1 response
                                     // Hard -> wait for f+1 responses
@@ -298,7 +325,10 @@ public class Library {
                                     }
 
                                     // To use above, just a template for now
-                                    LOGGER.log(Level.INFO, MessageFormat.format("{0} - Balance of account {1} is {2}", config.getId(), request.getSenderId(), response.getUpdateAccount().getUpdatedBalance()));
+                                    LOGGER.log(Level.INFO,
+                                            MessageFormat.format("{0} - Balance of account {1} is {2}", config.getId(),
+                                                    request.getSenderId(),
+                                                    response.getUpdateAccount().getUpdatedBalance()));
                                 }
                                 default -> {
                                     throw new LedgerException(ErrorMessage.CannotParseMessage);

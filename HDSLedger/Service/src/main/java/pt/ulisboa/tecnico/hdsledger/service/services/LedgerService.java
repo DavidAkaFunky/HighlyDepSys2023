@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.text.MessageFormat;
 import java.util.logging.Level;
 import java.util.Arrays;
-import java.util.Queue;
 import java.util.Optional;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -105,8 +104,12 @@ public class LedgerService implements UDPService {
         if (!verifyClientSignature(request)) {
             // TODO: reply to client
         }
-
-        startConsensusIfBlock(mempool.add(request));
+        if (this.config.isLeader())
+            startConsensusIfBlock(mempool.add(request));
+        else
+            mempool.accept(queue -> {
+                queue.add(request);
+            });
         setTimer();
     }
 
@@ -119,7 +122,13 @@ public class LedgerService implements UDPService {
             // TODO: reply to client
         }
 
-        startConsensusIfBlock(mempool.add(request));
+        if (this.config.isLeader())
+            startConsensusIfBlock(mempool.add(request));
+        else
+            mempool.accept(queue -> {
+                queue.add(request);
+            });
+
         setTimer();
     }
 

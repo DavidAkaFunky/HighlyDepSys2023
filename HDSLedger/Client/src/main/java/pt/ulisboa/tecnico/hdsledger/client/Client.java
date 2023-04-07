@@ -109,7 +109,8 @@ public class Client {
                     String accountId = tokens[1];
                     String consistencyMode = tokens[2];
                     System.out.println("Reading blockchain with " + consistencyMode + " mode...");
-                    ConsistencyMode mode = consistencyMode.equals("strong") ? ConsistencyMode.STRONG : ConsistencyMode.WEAK;
+                    ConsistencyMode mode = consistencyMode.equals("strong") ? ConsistencyMode.STRONG
+                            : ConsistencyMode.WEAK;
                     library.balance(accountId, mode);
                 }
                 case "exit" -> {

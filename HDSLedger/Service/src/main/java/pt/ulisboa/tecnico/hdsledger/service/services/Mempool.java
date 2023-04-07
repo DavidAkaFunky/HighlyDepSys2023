@@ -3,9 +3,13 @@ package pt.ulisboa.tecnico.hdsledger.service.services;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 
+import java.net.PasswordAuthentication;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.function.Consumer;
+import java.util.logging.Handler;
 
 public class Mempool {
 
@@ -36,10 +40,20 @@ public class Mempool {
         }
     }
 
+    public Queue<LedgerRequest> getInnerPool() {
+        return pool;
+    }
+
     public Optional<Block> add(LedgerRequest request) {
         synchronized (this.pool) {
             this.pool.add(request);
         }
         return checkTransactionThreshold();
+    }
+
+    public void accept(Consumer<Queue<LedgerRequest>> handler) {
+        synchronized (this.pool) {
+            handler.accept(this.pool);
+        }
     }
 }

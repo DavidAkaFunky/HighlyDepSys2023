@@ -1,5 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import com.google.gson.Gson;
@@ -12,6 +14,8 @@ public class LedgerResponse extends Message {
     private UpdateAccount updateAccount;
     // Signatures of the account update
     private Map<String, String> signatures;
+
+    private List<Integer> repliesTo = new ArrayList<>();
 
     public LedgerResponse(String senderId, boolean successful) {
         super(senderId, Type.REPLY);
@@ -34,6 +38,14 @@ public class LedgerResponse extends Message {
 
     public Map<String, String> getSignatures() {
         return signatures;
+    }
+
+    public List<Integer> getRepliesTo() {
+      return repliesTo;
+    }
+
+    public void setRepliesTo(List<Integer> repliesTo) {
+      this.repliesTo = repliesTo;
     }
 
     public String toJson() {

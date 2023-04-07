@@ -54,7 +54,6 @@ public class NodeService implements UDPService {
 
     private final PerfectLink clientLink;
 
-
     public NodeService(ProcessConfig[] clientsConfig, PerfectLink link, PerfectLink clientLink, ProcessConfig config,
             ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Ledger ledger, Mempool mempool) {
 
@@ -74,6 +73,12 @@ public class NodeService implements UDPService {
 
     public ProcessConfig getConfig() {
         return this.config;
+    }
+
+    private void garbageCollect(Block block) {
+        // vai buscar os requests deste bloco
+        // responde a todos e tira-os de la
+        // fazemos set to replyTo com o id que está na nossa mempool
     }
 
     /*
@@ -490,10 +495,9 @@ public class NodeService implements UDPService {
     private boolean verifyAccountSignatures(String senderId, int consensusInstance, CommitMessage message) {
         Map<String, UpdateAccount> accountSignatures = message.getUpdateAccountSignatures();
 
-
         if ((message.isValidBlock() && accountSignatures.size() == 0)
-                || (!message.isValidBlock() && accountSignatures.size() != 0)) return false;
-
+                || (!message.isValidBlock() && accountSignatures.size() != 0))
+            return false;
 
         // Get sender public key from config
         Optional<ProcessConfig> senderConfig = Arrays.stream(this.nodesConfig)
@@ -607,10 +611,43 @@ public class NodeService implements UDPService {
                         .forEach((updateAccount) -> {
                             try {
                                 LedgerResponse response = new LedgerResponse(this.config.getId(), true, updateAccount,
-                                        this.ledger.getAccountUpdateSignatures(consensusInstance, updateAccount.getHashPubKey()));
-                                System.out.println(this.ledger.getAccountUpdateSignatures(consensusInstance, updateAccount.getHashPubKey()).values());
-                                //System.out.println("SENDING RESPONSE TO CLIENT " + updateAccount.getOwnerId() + " with " + response.getSignatures().values().size() + "signatures");
+                                        this.ledger.getAccountUpdateSignatures(consensusInstance,
+                                                updateAccount.getHashPubKey()));
+
+                                if (this.config.isLeader()) {
+                                    // Requests in the block belong to the leader mempool
+                                    // so reply to client using those ids
+                                    var messageIds = this.instanceInfo.get(consensusInstance)
+                                            .getPreparedBlock()
+                                            .getRequests()
+                                            .stream()
+                                            .filter(r -> r.getSenderId().equals(updateAccount.getOwnerId()))
+                                            .map(r -> r.getMessageId())
+                                            .toList();
+                                    response.setRepliesTo(messageIds);
+
+                                } else {
+                                    List<Integer> repliesTo = new ArrayList<>();
+                                    // Remove requests from the mempool that are included in the block
+                                    // Store the ids of those requests to then reply to the client
+                                    System.out.println("AAQUI -----------------" + this.mempool.getInnerPool().size() + "------------------ CARALHO --------------------------------");
+                                    this.instanceInfo.get(consensusInstance).getPreparedBlock().getRequests().stream().forEach(request -> {
+                                        mempool.accept(queue -> {
+                                            for (var storedRequest : queue) {
+                                                System.out.println(storedRequest);
+                                                if (storedRequest.getMessage().equals(request.getMessage())) {
+                                                    repliesTo.add(storedRequest.getMessageId());
+                                                    mempool.getInnerPool().remove(storedRequest);
+                                                    return;
+                                                }
+                                            }
+                                        });
+                                    });
+                                    response.setRepliesTo(repliesTo);
+                                }
+
                                 this.clientLink.send(updateAccount.getOwnerId(), response);
+
                             } catch (Exception e) {
                                 LOGGER.log(Level.INFO,
                                         MessageFormat.format(
@@ -641,7 +678,8 @@ public class NodeService implements UDPService {
             lastDecidedConsensusInstance.getAndIncrement();
 
             LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - Decided on Consensus Instance {1}, Round {2}, Successful Add? {3}",
+                    MessageFormat.format(
+                            "{0} - Decided on Consensus Instance {1}, Round {2}, Successful Add? {3} ------------------------------------------------------------------",
                             config.getId(), consensusInstance, round, successfulAdd));
         }
     }

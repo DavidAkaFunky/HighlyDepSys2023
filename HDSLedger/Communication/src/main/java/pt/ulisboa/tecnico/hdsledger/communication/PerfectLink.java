@@ -1,6 +1,9 @@
 package pt.ulisboa.tecnico.hdsledger.communication;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import pt.ulisboa.tecnico.hdsledger.communication.Message.Type;
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig.ByzantineBehavior;
 
@@ -13,12 +16,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
+import java.util.stream.Collectors;
 
 public class PerfectLink {
 
     private static final CustomLogger LOGGER = new CustomLogger(PerfectLink.class.getName());
     // Time to wait for an ACK before resending the message
-    private static final int BASE_SLEEP_TIME = 200;
+    private final int BASE_SLEEP_TIME;
     // UDP Socket
     private final DatagramSocket socket;
     // Map of all nodes in the network
@@ -37,15 +41,16 @@ public class PerfectLink {
     private final AtomicInteger messageCounter = new AtomicInteger(0);
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
-        this(self, port, nodes, messageClass, true);
+        this(self, port, nodes, messageClass, true, 1000);
     }
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
-            boolean activateLogs) {
+            boolean activateLogs, int baseSleepTime) {
 
         this.config = self;
         this.messageClass = messageClass;
         this.maxByzantineNodeCount = Math.floorDiv(nodes.length - 1, 3);
+        this.BASE_SLEEP_TIME = baseSleepTime;
 
         Arrays.stream(nodes).forEach(node -> {
             String id = node.getId();
@@ -61,6 +66,10 @@ public class PerfectLink {
         if (!activateLogs) {
             LogManager.getLogManager().reset();
         }
+    }
+
+    public void ackAll(List<Integer> messageIds) {
+        receivedAcks.addAll(messageIds);
     }
 
     /*
@@ -164,8 +173,8 @@ public class PerfectLink {
         new Thread(() -> {
             try {
                 ProcessConfig node = nodes.get(nodeId);
-                if (node == null){
-                    System.out.println("NODE "+ nodeId + " IS NULL, CONFIG IS " + nodes);
+                if (node == null) {
+                    System.out.println("NODE " + nodeId + " IS NULL, CONFIG IS " + nodes);
                     throw new LedgerException(ErrorMessage.NoSuchNode);
                 }
 
@@ -189,6 +198,8 @@ public class PerfectLink {
 
                     // Wait (using exponential back-off), then look for ACK
                     Thread.sleep(sleepTime);
+
+                    System.out.println(new Gson().toJson(receivedAcks));
 
                     // receive method will set receivedAcks when sees corresponding ACK
                     if (receivedAcks.contains(messageId))
@@ -260,7 +271,8 @@ public class PerfectLink {
         SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
         Message message = new Gson().fromJson(responseData.getMessage(), Message.class);
 
-        System.out.println("RECEIVED " + message.getType() + " FROM " + message.getSenderId() + " WITH ID " + message.getMessageId());
+        System.out.println("RECEIVED " + message.getType() + " FROM " + message.getSenderId() + " WITH ID "
+                + message.getMessageId());
 
         // Verify signature (byzantine nodes will avoid it to cooperate with each other)
         // BYZANTINE_TESTS
@@ -301,17 +313,29 @@ public class PerfectLink {
             message.setType(Message.Type.IGNORE);
         }
 
-        if (message.getType().equals(Message.Type.PREPARE) || message.getType().equals(Message.Type.COMMIT)) {
-            ConsensusMessage consensusMessage = (ConsensusMessage) message;
-            if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId())) {
-                receivedAcks.add(consensusMessage.getReplyToMessageId());
+        switch (message.getType()) {
+            case CREATE, BALANCE, TRANSFER -> {
+                return message;
             }
-            return message;
+            case PRE_PREPARE, IGNORE -> {
+                return message;
+            }
+            case PREPARE, COMMIT -> {
+                ConsensusMessage consensusMessage = (ConsensusMessage) message;
+                if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId())) {
+                    receivedAcks.add(consensusMessage.getReplyToMessageId());
+                }
+                return message;
+            }
+            case REPLY -> {
+                LedgerResponse castedMessage = (LedgerResponse) message;
+                receivedAcks.addAll(castedMessage.getRepliesTo());
+            }
+            default -> {
+                System.out.println("que mensagem vai responder com um ack: " + message.getType());
+            }
         }
-
-        if (message.getType().equals(Message.Type.PRE_PREPARE))
-            return message;
-
+            
         InetAddress address = InetAddress.getByName(response.getAddress().getHostAddress());
         int port = response.getPort();
 
