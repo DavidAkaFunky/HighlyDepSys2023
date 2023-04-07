@@ -384,8 +384,8 @@ public class NodeService implements UDPService {
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
-                        "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}, Block {4}",
-                        config.getId(), senderId, consensusInstance, round, block));
+                        "{0} - Received PREPARE message from {1}: Consensus Instance {2}, Round {3}",
+                        config.getId(), senderId, consensusInstance, round));
 
         String errorLog = MessageFormat.format(
                 "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
@@ -447,7 +447,7 @@ public class NodeService implements UDPService {
             // Verify transactions validity and update temporary state
             Map<String, UpdateAccount> updateAccount = this.tryAddBlock(consensusInstance, preparedBlock.get());
 
-            if (updateAccount.size() == 0) {
+            if (updateAccount.size() == 0) { 
                 // Reply to every prepare message sender with the information that the block
                 // prepared is invalid
                 // and therefore no update account signatures will be sent
@@ -587,7 +587,8 @@ public class NodeService implements UDPService {
             boolean successfulAdd = accountUpdates.size() > 0;
 
             if (successfulAdd) {
-                System.out.println("Block was successfully added");
+                System.out.println("Block was successfully added " + new GsonBuilder().setPrettyPrinting().create()
+                        .toJson(accountUpdates));
 
                 // Store signatures from other nodes
                 commitQuorum.get().stream().forEach((m) -> {
@@ -630,7 +631,6 @@ public class NodeService implements UDPService {
                                     List<Integer> repliesTo = new ArrayList<>();
                                     // Remove requests from the mempool that are included in the block
                                     // Store the ids of those requests to then reply to the client
-                                    System.out.println("AAQUI -----------------" + this.mempool.getInnerPool().size() + "------------------ CARALHO --------------------------------");
                                     this.instanceInfo.get(consensusInstance).getPreparedBlock().getRequests().stream().forEach(request -> {
                                         mempool.accept(queue -> {
                                             for (var storedRequest : queue) {

@@ -42,6 +42,11 @@ public class CollapsingSet implements Set<Integer> {
         }
     }
 
+    private boolean unsafeContains(Object o) {
+        if (!(o instanceof Integer i)) return false;
+        return i <= this.floor || this.set.contains(i);
+    }
+
     private Set<Integer> getFullSet() {
         // inefficient
         synchronized (this.set) {
@@ -71,6 +76,7 @@ public class CollapsingSet implements Set<Integer> {
     @Override
     public boolean add(Integer integer) {
         synchronized (this.set) {
+            if (this.unsafeContains(integer)) return false;
             if (integer == (floor + 1)) {
                 int newFloor = integer;
                 boolean removeReturn = true;

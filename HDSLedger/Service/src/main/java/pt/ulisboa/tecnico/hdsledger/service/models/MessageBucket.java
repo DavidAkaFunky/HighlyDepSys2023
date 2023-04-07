@@ -3,7 +3,6 @@ package pt.ulisboa.tecnico.hdsledger.service.models;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -71,19 +70,23 @@ public class MessageBucket {
      */
     public Optional<List<ConsensusMessage>> hasValidCommitQuorum(String nodeId, int instance, int round) {
         // Create mapping of value to frequency
-        HashMap<String, List<ConsensusMessage>> messages = new HashMap<>();
+        HashMap<Integer, List<ConsensusMessage>> messages = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
             // for each commit message i have received
             CommitMessage commitMessage = message.deserializeCommitMessage();
             // i get the list of Account Updates in each commit
             List<UpdateAccount> updates = commitMessage.getUpdateAccountSignatures().values().stream().toList();
-            String updateKey = new Gson().toJson(updates);
-            List<ConsensusMessage> msgs = messages.getOrDefault(updateKey, new ArrayList<>());
+            // Updates may be out of order which leads to a different hash code (even though its the same updates)
+            int hash = updates.stream().map(UpdateAccount::hashCode).reduce(0, (acc, next) -> acc ^ next);
+            List<ConsensusMessage> msgs = messages.getOrDefault(hash, new ArrayList<>());
             msgs.add(message);
             // I use the list of Account Updates and count the number of times I have seen
             // the same collection
-            messages.put(updateKey, msgs);
+            messages.put(hash, msgs);
         });
+
+        System.out.println("INSIDE VALID COMMIT QUORUM");
+        System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(messages));
 
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size

@@ -255,8 +255,6 @@ public class Library {
                                     config.getId(), message.getMessageId(), message.getSenderId()));
                             return;
                         } else if (message.getType() != Message.Type.REPLY) {
-                            LOGGER.log(Level.INFO,
-                                    MessageFormat.format("{} - AQUIIIIIIIIIIIIIIIIIIIIIII", config.getId()));
                             throw new LedgerException(ErrorMessage.CannotParseMessage);
                         }
                         LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received REPLY message from {1}",

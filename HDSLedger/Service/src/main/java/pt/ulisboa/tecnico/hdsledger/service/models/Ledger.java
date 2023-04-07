@@ -26,13 +26,15 @@ public class Ledger {
     private final Map<String, Account> temporaryAccounts = new ConcurrentHashMap<>();
     // Map consensus instance -> public key hash -> account update
     private final Map<Integer, Map<String, UpdateAccount>> accountUpdates = new ConcurrentHashMap<>();
-    // Map consensus instance -> public key hash -> signer Id -> account update signature
+    // Map consensus instance -> public key hash -> signer Id -> account update
+    // signature
     private final Map<Integer, Map<String, Map<String, String>>> accountUpdateSignatures = new ConcurrentHashMap<>();
 
     public Ledger() {
     }
 
-    public void addAccountUpdateSignature(int consensusInstance, String publicKeyHash, String signerId, String signature) {
+    public void addAccountUpdateSignature(int consensusInstance, String publicKeyHash, String signerId,
+            String signature) {
         accountUpdateSignatures.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
         accountUpdateSignatures.get(consensusInstance).putIfAbsent(publicKeyHash, new ConcurrentHashMap<>());
         accountUpdateSignatures.get(consensusInstance).get(publicKeyHash).put(signerId, signature);
@@ -56,7 +58,7 @@ public class Ledger {
         }
         // Put returns null if the key was not present
         Account acc = new Account(ownerId, publicKeyHash);
-        if (temporaryAccounts.put(publicKeyHash, acc) == null){
+        if (temporaryAccounts.put(publicKeyHash, acc) == null) {
             return Optional.of(acc);
         }
         return Optional.empty();
@@ -126,20 +128,19 @@ public class Ledger {
     }
 
     public void commitTransactions(int consensusInstance) {
-        temporaryAccounts.forEach((pubKeyHash, tmpAcc) -> {
-            UpdateAccount update = accountUpdates.get(consensusInstance).get(pubKeyHash);
-            accounts.putIfAbsent(pubKeyHash, new Account(update.getOwnerId(), pubKeyHash));
-            Account acc = accounts.get(pubKeyHash);
+        this.accountUpdates.get(consensusInstance).forEach((pubKeyHash, update) -> {
+            this.accounts.putIfAbsent(pubKeyHash, new Account(update.getOwnerId(), pubKeyHash));
+            Account acc = this.accounts.get(pubKeyHash);
             acc.updateAccount(update, pubKeyHash);
         });
     }
 
     public Account getAccount(String publicKeyHash) {
-        return accounts.get(publicKeyHash);
+        return this.accounts.get(publicKeyHash);
     }
 
     public Account getTemporaryAccount(String publicKeyHash) {
-        return temporaryAccounts.get(publicKeyHash);
+        return this.temporaryAccounts.get(publicKeyHash);
     }
 
     public void addAccountUpdate(int consensusInstance, String publicKeyHash, UpdateAccount updateAccount) {

@@ -41,7 +41,7 @@ public class PerfectLink {
     private final AtomicInteger messageCounter = new AtomicInteger(0);
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
-        this(self, port, nodes, messageClass, true, 1000);
+        this(self, port, nodes, messageClass, true, 200);
     }
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
@@ -173,10 +173,8 @@ public class PerfectLink {
         new Thread(() -> {
             try {
                 ProcessConfig node = nodes.get(nodeId);
-                if (node == null) {
-                    System.out.println("NODE " + nodeId + " IS NULL, CONFIG IS " + nodes);
+                if (node == null) 
                     throw new LedgerException(ErrorMessage.NoSuchNode);
-                }
 
                 data.setMessageId(messageCounter.getAndIncrement());
 
@@ -198,8 +196,6 @@ public class PerfectLink {
 
                     // Wait (using exponential back-off), then look for ACK
                     Thread.sleep(sleepTime);
-
-                    System.out.println(new Gson().toJson(receivedAcks));
 
                     // receive method will set receivedAcks when sees corresponding ACK
                     if (receivedAcks.contains(messageId))
@@ -262,7 +258,7 @@ public class PerfectLink {
      */
     public Message receive() throws IOException, ClassNotFoundException {
 
-        byte[] buf = new byte[4096];
+        byte[] buf = new byte[8192];
         DatagramPacket response = new DatagramPacket(buf, buf.length);
 
         socket.receive(response);
@@ -320,12 +316,17 @@ public class PerfectLink {
             case PRE_PREPARE, IGNORE -> {
                 return message;
             }
-            case PREPARE, COMMIT -> {
+            case PREPARE -> {
                 ConsensusMessage consensusMessage = (ConsensusMessage) message;
-                if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId())) {
+                if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId()))
                     receivedAcks.add(consensusMessage.getReplyToMessageId());
-                }
+                
                 return message;
+            }
+            case COMMIT -> {
+                ConsensusMessage consensusMessage = (ConsensusMessage) message;
+                if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId()))
+                    receivedAcks.add(consensusMessage.getReplyToMessageId());
             }
             case REPLY -> {
                 LedgerResponse castedMessage = (LedgerResponse) message;

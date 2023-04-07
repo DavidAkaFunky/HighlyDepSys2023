@@ -206,7 +206,6 @@ public class LedgerService implements UDPService {
                                 default -> throw new LedgerException(ErrorMessage.CannotParseMessage);
                             }
 
-
                         }).start();
                     }
                 } catch (IOException | ClassNotFoundException e) {
