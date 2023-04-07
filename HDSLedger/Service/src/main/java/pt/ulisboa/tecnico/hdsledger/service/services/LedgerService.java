@@ -23,7 +23,7 @@ public class LedgerService implements UDPService {
     private static final CustomLogger LOGGER = new CustomLogger(LedgerService.class.getName());
     // Clients configurations
     private final ProcessConfig[] clientConfigs;
-    // Link to communicate with blockchain nodes
+    // Link to communicate with client nodes
     private final PerfectLink link;
     // Node configuration
     private final ProcessConfig config;
@@ -92,7 +92,7 @@ public class LedgerService implements UDPService {
         timer.schedule(new TimerTask() {
             @Override
             public void run() {
-                System.out.println("Timer ran");
+                System.out.println("Timer ran out!");
             }
         }, 2 * 60 * 1000);
     }
@@ -167,7 +167,6 @@ public class LedgerService implements UDPService {
                         // Separate thread to handle each message
                         new Thread(() -> {
 
-                            Optional<LedgerResponse> response = Optional.empty();
                             switch (message.getType()) {
                                 case CREATE -> {
                                     LOGGER.log(Level.INFO,

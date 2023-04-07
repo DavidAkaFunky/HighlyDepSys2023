@@ -41,7 +41,7 @@ public class PerfectLink {
     }
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass,
-                       boolean activateLogs) {
+            boolean activateLogs) {
 
         this.config = self;
         this.messageClass = messageClass;
@@ -137,17 +137,18 @@ public class PerfectLink {
      */
     // TODO: Fix me, cant have node message here because of circular dependency
     /*
-    public void badBroadcast(ConsensusMessage data) {
-        Gson gson = new Gson();
-        nodes.forEach((destId, dest) -> {
-            ConsensusMessage badData = gson.fromJson(gson.toJson(data), data.getClass());
-            List<String> args = badData.getArgs();
-            args.set(args.size() - 1, "BYZANTINE_VALUE_" + UUID.randomUUID().toString().replace("_", ""));
-            badData.setArgs(args);
-            send(destId, badData);
-        });
-    }
-    */
+     * public void badBroadcast(ConsensusMessage data) {
+     * Gson gson = new Gson();
+     * nodes.forEach((destId, dest) -> {
+     * ConsensusMessage badData = gson.fromJson(gson.toJson(data), data.getClass());
+     * List<String> args = badData.getArgs();
+     * args.set(args.size() - 1, "BYZANTINE_VALUE_" +
+     * UUID.randomUUID().toString().replace("_", ""));
+     * badData.setArgs(args);
+     * send(destId, badData);
+     * });
+     * }
+     */
 
     /*
      * Sends a message to a specific node with guarantee of delivery
@@ -163,8 +164,10 @@ public class PerfectLink {
         new Thread(() -> {
             try {
                 ProcessConfig node = nodes.get(nodeId);
-                if (node == null)
+                if (node == null){
+                    System.out.println("NODE "+ nodeId + " IS NULL, CONFIG IS " + nodes);
                     throw new LedgerException(ErrorMessage.NoSuchNode);
+                }
 
                 data.setMessageId(messageCounter.getAndIncrement());
 
@@ -175,7 +178,9 @@ public class PerfectLink {
                 int messageId = data.getMessageId();
                 int sleepTime = BASE_SLEEP_TIME;
 
-                for (; ; ) {
+                System.out.println("SENDING TO " + nodeId + " at " + destPort + " " + destAddress.getHostName());
+
+                for (;;) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Sending {1} message to {2}:{3} with message ID {4} - Attempt #{5}", config.getId(),
                             data.getType(), destAddress, destPort, messageId, count++));
@@ -193,8 +198,8 @@ public class PerfectLink {
                     sleepTime <<= 1;
                 }
 
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - ConsensusMessage {1} sent to {2}:{3} successfully",
-                        config.getId(), data.getType(), destAddress, destPort));
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} from {2} sent to {3}:{4} successfully",
+                        config.getId(), data.getType(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }
@@ -255,12 +260,14 @@ public class PerfectLink {
         SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
         Message message = new Gson().fromJson(responseData.getMessage(), Message.class);
 
+        System.out.println("RECEIVED " + message.getType() + " FROM " + message.getSenderId() + " WITH ID " + message.getMessageId());
+
         // Verify signature (byzantine nodes will avoid it to cooperate with each other)
         // BYZANTINE_TESTS
         // Any byzantine node will not verify signatures
         if (config.getByzantineBehavior() == ByzantineBehavior.NONE
                 && !RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
-                nodes.get(message.getSenderId()).getPublicKeyPath())) {
+                        nodes.get(message.getSenderId()).getPublicKeyPath())) {
             message.setType(Message.Type.IGNORE);
 
             LOGGER.log(Level.INFO, MessageFormat.format(

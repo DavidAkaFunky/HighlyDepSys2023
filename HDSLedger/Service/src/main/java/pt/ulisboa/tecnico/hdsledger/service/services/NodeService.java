@@ -458,8 +458,6 @@ public class NodeService implements UDPService {
                             .setMessage(c.toJson())
                             .build();
 
-                    System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(m));
-
                     link.send(senderMessage.getSenderId(), m);
                 });
             } else {
@@ -522,7 +520,7 @@ public class NodeService implements UDPService {
      *
      * @param message Message to be handled
      */
-    public void uponCommit(ConsensusMessage message) {
+    public synchronized void uponCommit(ConsensusMessage message) {
 
         String senderId = message.getSenderId();
         int consensusInstance = message.getConsensusInstance();
@@ -585,6 +583,7 @@ public class NodeService implements UDPService {
             boolean successfulAdd = accountUpdates.size() > 0;
 
             if (successfulAdd) {
+                System.out.println("Block was successfully added");
 
                 // Store signatures from other nodes
                 commitQuorum.get().stream().forEach((m) -> {
@@ -608,7 +607,9 @@ public class NodeService implements UDPService {
                         .forEach((updateAccount) -> {
                             try {
                                 LedgerResponse response = new LedgerResponse(this.config.getId(), true, updateAccount,
-                                        this.ledger.getAccountUpdateSignatures(consensusInstance, senderId));
+                                        this.ledger.getAccountUpdateSignatures(consensusInstance, updateAccount.getHashPubKey()));
+                                System.out.println(this.ledger.getAccountUpdateSignatures(consensusInstance, updateAccount.getHashPubKey()).values());
+                                //System.out.println("SENDING RESPONSE TO CLIENT " + updateAccount.getOwnerId() + " with " + response.getSignatures().values().size() + "signatures");
                                 this.clientLink.send(updateAccount.getOwnerId(), response);
                             } catch (Exception e) {
                                 LOGGER.log(Level.INFO,
@@ -626,7 +627,7 @@ public class NodeService implements UDPService {
                         .forEach(id -> {
                             try {
                                 LedgerResponse response = new LedgerResponse(this.config.getId(), false);
-                                this.link.send(id, response);
+                                this.clientLink.send(id, response);
                             } catch (Exception e) {
                                 LOGGER.log(Level.INFO,
                                         MessageFormat.format(
@@ -639,7 +640,6 @@ public class NodeService implements UDPService {
 
             lastDecidedConsensusInstance.getAndIncrement();
 
-            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(ledger));
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Decided on Consensus Instance {1}, Round {2}, Successful Add? {3}",
                             config.getId(), consensusInstance, round, successfulAdd));

@@ -10,7 +10,7 @@ import java.util.stream.IntStream;
 public class CollapsingSet implements Set<Integer> {
 
     private final Set<Integer> set;
-    private int floor = 0;
+    private int floor = -1;
 
     public CollapsingSet() {
         this.set = new HashSet<>();

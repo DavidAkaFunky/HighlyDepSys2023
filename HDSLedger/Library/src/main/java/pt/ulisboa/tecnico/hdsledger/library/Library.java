@@ -1,6 +1,8 @@
 package pt.ulisboa.tecnico.hdsledger.library;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
 import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestBalance.ConsistencyMode;
 import pt.ulisboa.tecnico.hdsledger.utilities.*;
@@ -244,6 +246,7 @@ public class Library {
                         LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received REPLY message from {1}", config.getId(), message.getSenderId()));
 
                         LedgerResponse response = (LedgerResponse) message;
+                        System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(response));
                         List<Integer> nonces = response.getUpdateAccount().getNonces();
                         // Each nonce represent a request sent by this client
                         for (int nonce : nonces) {
@@ -259,7 +262,7 @@ public class Library {
                             ledgerResponses.add(response);
 
                             switch (request.getType()) {
-                                case CREATE, TRANSFER-> {
+                                case CREATE, TRANSFER -> {
                                     // Wait for f+1 responses
                                     if (ledgerResponses.size() < this.smallQuorumSize) break;
                                     // Remove processed messages

@@ -59,8 +59,6 @@ public class MessageBucket {
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
 
-        if (this.bucket.get(instance).get(round).values().size() >= 3)
-            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(frequency));
         return frequency.entrySet().stream().filter((Map.Entry<Block, Integer> entry) -> {
             return entry.getValue() >= quorumSize;
         }).map((Map.Entry<Block, Integer> entry) -> {
@@ -76,14 +74,9 @@ public class MessageBucket {
         HashMap<String, List<ConsensusMessage>> messages = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
             // for each commit message i have received
-            System.out.println("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC");
             CommitMessage commitMessage = message.deserializeCommitMessage();
-            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(commitMessage));
-            System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
             // i get the list of Account Updates in each commit
             List<UpdateAccount> updates = commitMessage.getUpdateAccountSignatures().values().stream().toList();
-            System.out.println(updates);
-            System.out.println("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
             String updateKey = new Gson().toJson(updates);
             List<ConsensusMessage> msgs = messages.getOrDefault(updateKey, new ArrayList<>());
             msgs.add(message);
@@ -92,7 +85,6 @@ public class MessageBucket {
             messages.put(updateKey, msgs);
         });
 
-        System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(messages));
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
         return messages.values().stream().filter(
