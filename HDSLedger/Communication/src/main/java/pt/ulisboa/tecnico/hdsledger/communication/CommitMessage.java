@@ -9,7 +9,7 @@ public class CommitMessage {
 
     // True if the prepared block is valid
     private boolean validBlock;
-    // Map public key hash -> signature for updated account
+    // Map Signature of update -> UpdatedAccount
     private Map<String, UpdateAccount> accountUpdates = new HashMap<>();
 
     public CommitMessage(boolean validBlock) {

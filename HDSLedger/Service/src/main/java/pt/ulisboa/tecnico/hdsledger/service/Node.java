@@ -59,8 +59,8 @@ public class Node {
             Mempool mempool = new Mempool(blockSize);
 
             // Services that implement listen from UDPService
-            NodeService nodeService = new NodeService(clientConfigs, linkToNodes, nodeConfig, leaderConfig,
-                    nodeConfigs.length, ledger, mempool);
+            NodeService nodeService = new NodeService(clientConfigs, linkToNodes, linkToClients, nodeConfig, leaderConfig,
+                    nodeConfigs, ledger, mempool);
             LedgerService ledgerService = new LedgerService(clientConfigs, linkToClients, nodeConfig,
                     nodeService, blockSize, ledger, mempool);
 

@@ -60,4 +60,9 @@ public class LedgerRequest extends Message {
             request.getSenderId().equals(getSenderId()) && request.getType().equals(getType()) &&
             request.getMessageId() == getMessageId();
     }
+
+    @Override
+    public int hashCode() {
+        return toString().hashCode();
+    }
 }

@@ -10,6 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.text.MessageFormat;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
@@ -47,7 +49,7 @@ public class MessageBucket {
 
     public Optional<Block> hasValidPrepareQuorum(String nodeId, int instance, int round) {
         // Create mapping of value to frequency
-        HashMap<Block, Integer> frequency = new HashMap<Block, Integer>();
+        HashMap<Block, Integer> frequency = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
             PrepareMessage prepareMessage = message.deserializePrepareMessage();
             Block block = Block.fromJson(prepareMessage.getBlock());
@@ -56,6 +58,9 @@ public class MessageBucket {
 
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
+
+        if (this.bucket.get(instance).get(round).values().size() >= 3)
+            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(frequency));
         return frequency.entrySet().stream().filter((Map.Entry<Block, Integer> entry) -> {
             return entry.getValue() >= quorumSize;
         }).map((Map.Entry<Block, Integer> entry) -> {
@@ -68,22 +73,30 @@ public class MessageBucket {
      */
     public Optional<List<ConsensusMessage>> hasValidCommitQuorum(String nodeId, int instance, int round) {
         // Create mapping of value to frequency
-        HashMap<Collection<UpdateAccount>, List<ConsensusMessage>> messages = new HashMap<Collection<UpdateAccount>, List<ConsensusMessage>>();
+        HashMap<String, List<ConsensusMessage>> messages = new HashMap<>();
         bucket.get(instance).get(round).values().forEach((message) -> {
+            // for each commit message i have received
+            System.out.println("CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC");
             CommitMessage commitMessage = message.deserializeCommitMessage();
-            Collection<UpdateAccount> updates = commitMessage.getUpdateAccountSignatures().values();
-            List<ConsensusMessage> msgs = messages.getOrDefault(updates, new ArrayList<>());
+            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(commitMessage));
+            System.out.println("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+            // i get the list of Account Updates in each commit
+            List<UpdateAccount> updates = commitMessage.getUpdateAccountSignatures().values().stream().toList();
+            System.out.println(updates);
+            System.out.println("BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
+            String updateKey = new Gson().toJson(updates);
+            List<ConsensusMessage> msgs = messages.getOrDefault(updateKey, new ArrayList<>());
             msgs.add(message);
-            messages.put(updates, msgs);
+            // I use the list of Account Updates and count the number of times I have seen
+            // the same collection
+            messages.put(updateKey, msgs);
         });
 
+        System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(messages));
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
-        return messages.entrySet().stream().filter((Map.Entry<Collection<UpdateAccount>, List<ConsensusMessage>> entry) -> {
-            return entry.getValue().size() >= quorumSize;
-        }).map((Map.Entry<Collection<UpdateAccount>, List<ConsensusMessage>> entry) -> {
-            return entry.getValue();
-        }).findFirst();
+        return messages.values().stream().filter(
+                consensusMessages -> consensusMessages.size() >= quorumSize).findFirst();
     }
 
     public void verifyReceivedPrepareMessage(Block block, int instance, int round) {

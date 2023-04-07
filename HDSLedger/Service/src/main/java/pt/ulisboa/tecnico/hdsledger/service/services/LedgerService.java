@@ -99,8 +99,8 @@ public class LedgerService implements UDPService {
 
     public void createAccount(LedgerRequest request) {
         LOGGER.log(Level.INFO,
-                MessageFormat.format("{0} - Received LedgerRequestCreate from {1} - {2}", this.config.getId(),
-                        request.getSenderId(), request));
+                MessageFormat.format("{0} - Received LedgerRequestCreate from {1}", this.config.getId(),
+                        request.getSenderId()));
 
         if (!verifyClientSignature(request)) {
             // TODO: reply to client
@@ -112,8 +112,8 @@ public class LedgerService implements UDPService {
 
     public void transfer(LedgerRequest request) {
         LOGGER.log(Level.INFO,
-                MessageFormat.format("{0} - Received LedgerRequestTransfer from {1} - {2}", this.config.getId(),
-                        request.getSenderId(), request));
+                MessageFormat.format("{0} - Received LedgerRequestTransfer from {1}", this.config.getId(),
+                        request.getSenderId()));
 
         if (!verifyClientSignature(request)) {
             // TODO: reply to client
@@ -125,8 +125,8 @@ public class LedgerService implements UDPService {
 
     public void balance(LedgerRequest request) {
         LOGGER.log(Level.INFO,
-                MessageFormat.format("{0} - Received LedgerRequestBalance from {1} - {2}", this.config.getId(),
-                        request.getSenderId(), request));
+                MessageFormat.format("{0} - Received LedgerRequestBalance from {1}", this.config.getId(),
+                        request.getSenderId()));
 
         if (!verifyClientSignature(request)) {
             // TODO: reply to client
@@ -187,19 +187,15 @@ public class LedgerService implements UDPService {
                                                     this.config.getId(), message.getSenderId()));
                                     balance((LedgerRequest) message);
                                 }
-                                case ACK -> {
-                                    LOGGER.log(Level.INFO,
+                                case ACK -> LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received ACK message from {1}",
                                                     this.config.getId(), message.getSenderId()));
-                                }
-                                case IGNORE -> {
-                                    LOGGER.log(Level.INFO,
+
+                                case IGNORE -> LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received IGNORE message from {1}",
                                                     this.config.getId(), message.getSenderId()));
-                                }
-                                default -> {
-                                    throw new LedgerException(ErrorMessage.CannotParseMessage);
-                                }
+
+                                default -> throw new LedgerException(ErrorMessage.CannotParseMessage);
                             }
 
 

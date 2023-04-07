@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
+import com.google.gson.GsonBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.service.models.Account;
@@ -49,19 +50,26 @@ public class NodeService implements UDPService {
     // Store if already received pre-prepare for a given <consensus, round>
     private final Map<Integer, Map<Integer, Boolean>> receivedPrePrepare = new ConcurrentHashMap<>();
 
-    public NodeService(ProcessConfig[] clientsConfig, PerfectLink link, ProcessConfig config,
-            ProcessConfig leaderConfig, int nodesLength, Ledger ledger, Mempool mempool) {
+    private final ProcessConfig[] nodesConfig;
+
+    private final PerfectLink clientLink;
+
+
+    public NodeService(ProcessConfig[] clientsConfig, PerfectLink link, PerfectLink clientLink, ProcessConfig config,
+            ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Ledger ledger, Mempool mempool) {
 
         this.clientsConfig = clientsConfig;
         this.link = link;
+        this.clientLink = clientLink;
         this.config = config;
         this.leaderConfig = leaderConfig;
+        this.nodesConfig = nodesConfig;
 
         this.ledger = ledger;
         this.mempool = mempool;
 
-        this.prepareMessages = new MessageBucket(nodesLength);
-        this.commitMessages = new MessageBucket(nodesLength);
+        this.prepareMessages = new MessageBucket(nodesConfig.length);
+        this.commitMessages = new MessageBucket(nodesConfig.length);
     }
 
     public ProcessConfig getConfig() {
@@ -359,7 +367,7 @@ public class NodeService implements UDPService {
      *
      * @param message Message to be handled
      */
-    public void uponPrepare(ConsensusMessage message) {
+    public synchronized void uponPrepare(ConsensusMessage message) {
 
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
@@ -415,6 +423,7 @@ public class NodeService implements UDPService {
                     .build();
 
             link.send(senderId, m);
+            return;
         }
 
         // Find block with valid quorum
@@ -449,6 +458,8 @@ public class NodeService implements UDPService {
                             .setMessage(c.toJson())
                             .build();
 
+                    System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(m));
+
                     link.send(senderMessage.getSenderId(), m);
                 });
             } else {
@@ -481,14 +492,14 @@ public class NodeService implements UDPService {
     private boolean verifyAccountSignatures(String senderId, int consensusInstance, CommitMessage message) {
         Map<String, UpdateAccount> accountSignatures = message.getUpdateAccountSignatures();
 
+
         if ((message.isValidBlock() && accountSignatures.size() == 0)
-                || (!message.isValidBlock() && accountSignatures.size() != 0)) {
-            return false;
-        }
+                || (!message.isValidBlock() && accountSignatures.size() != 0)) return false;
+
 
         // Get sender public key from config
-        Optional<ProcessConfig> senderConfig = Arrays.stream(this.clientsConfig)
-                .filter(client -> client.getId().equals(senderId)).findFirst();
+        Optional<ProcessConfig> senderConfig = Arrays.stream(this.nodesConfig)
+                .filter(node -> node.getId().equals(senderId)).findFirst();
         if (senderConfig.isEmpty()) {
             return false;
         }
@@ -598,8 +609,7 @@ public class NodeService implements UDPService {
                             try {
                                 LedgerResponse response = new LedgerResponse(this.config.getId(), true, updateAccount,
                                         this.ledger.getAccountUpdateSignatures(consensusInstance, senderId));
-
-                                this.link.send(updateAccount.getOwnerId(), response);
+                                this.clientLink.send(updateAccount.getOwnerId(), response);
                             } catch (Exception e) {
                                 LOGGER.log(Level.INFO,
                                         MessageFormat.format(
@@ -629,6 +639,7 @@ public class NodeService implements UDPService {
 
             lastDecidedConsensusInstance.getAndIncrement();
 
+            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(ledger));
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Decided on Consensus Instance {1}, Round {2}, Successful Add? {3}",
                             config.getId(), consensusInstance, round, successfulAdd));

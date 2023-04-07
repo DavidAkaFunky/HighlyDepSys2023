@@ -64,4 +64,9 @@ public class UpdateAccount {
             return false;
         return nonces != null ? nonces.equals(that.nonces) : that.nonces == null;
     }
+
+    @Override
+    public int hashCode() {
+        return new Gson().toJson(this).hashCode();
+    }
 }

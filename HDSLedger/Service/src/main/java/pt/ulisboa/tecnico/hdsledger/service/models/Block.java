@@ -66,4 +66,9 @@ public class Block {
         Block block = (Block) o;
         return block.getConsensusInstance() == this.consensusInstance && block.getRequests().equals(this.requests);
     }
+
+    @Override
+    public int hashCode() {
+        return toJson().hashCode();
+    }
 }
