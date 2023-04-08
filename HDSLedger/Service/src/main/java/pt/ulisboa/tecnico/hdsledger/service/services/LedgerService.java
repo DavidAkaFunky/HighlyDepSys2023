@@ -28,10 +28,6 @@ public class LedgerService implements UDPService {
     private final ProcessConfig config;
     // Node service that provides consensus interface
     private final NodeService service;
-    // Number of transactions per block
-    private final int blockSize;
-    // Store accounts and signatures of updates to accounts
-    private Ledger ledger;
     // Map of unconfirmed transactions
     private final Mempool mempool;
 
@@ -39,14 +35,11 @@ public class LedgerService implements UDPService {
     private Thread thread;
 
     public LedgerService(ProcessConfig[] clientConfigs, PerfectLink link, ProcessConfig config,
-            NodeService service, int blockSize, Ledger ledger, Mempool mempool) {
+            NodeService service, Mempool mempool) {
         this.clientConfigs = clientConfigs;
         this.link = link;
         this.config = config;
         this.service = service;
-        this.blockSize = blockSize;
-
-        this.ledger = ledger;
         this.mempool = mempool;
     }
 
@@ -145,10 +138,10 @@ public class LedgerService implements UDPService {
 
         switch (balanceRequest.getConsistencyMode()) {
             case STRONG -> {
-
-            }
+                // TODO
+            }   
             case WEAK -> {
-
+                this.service.weakRead(request);
             }
         }
     }
@@ -157,8 +150,6 @@ public class LedgerService implements UDPService {
         if (block.isEmpty()) return;
         this.service.startConsensus(block.get());
     }
-
-
 
     @Override
     public void listen() {

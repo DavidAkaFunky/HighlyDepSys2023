@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.library;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestBalance.ConsistencyMode;
@@ -179,7 +180,7 @@ public class Library {
         // Each LedgerRequest receives a specific ledger request which is serialized and
         // signed
         LedgerRequestBalance requestRead = new LedgerRequestBalance(accountPubKey, consistencyMode,
-                this.knownConsensusInstance);
+                this.knownConsensusInstance, currentNonce);
         String requestTransferSerialized = new Gson().toJson(requestRead);
         String signature;
         try {
@@ -213,7 +214,7 @@ public class Library {
                 if (isSuccessful) {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
-                                    "{0} - Account {1} was created with balance {3}",
+                                    "{0} - Account {1} was created with balance {2}",
                                     config.getId(), request.getSenderId(),
                                     response.getUpdateAccount().getUpdatedBalance()));
                 } else {
@@ -228,29 +229,28 @@ public class Library {
                 if (isSuccessful) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Transfer from {1} to {2} was successful. Current balance is {3}",
-                            config.getId(), requestTransfer.getSourcePubKey(),
-                            requestTransfer.getDestinationPubKey(),
+                            config.getId(), requestTransfer.getSourcePubKey().toString(),
+                            requestTransfer.getDestinationPubKey().toString(),
                             response.getUpdateAccount().getUpdatedBalance()));
                 } else {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
                                     "{0} - Transfer from {1} to {2} was unsuccessful.",
-                                    config.getId(), requestTransfer.getSourcePubKey(),
-                                    requestTransfer.getDestinationPubKey()));
+                                    config.getId(), requestTransfer.getSourcePubKey().toString(),
+                                    requestTransfer.getDestinationPubKey().toString()));
                 }
             }
             case BALANCE -> {
-                LedgerRequestBalance requestBalance = request.deserializeBalance();
                 if (isSuccessful) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Balance of {1} is {2}",
-                            config.getId(), requestBalance.getAccountPubKey(),
+                            config.getId(), request.getSenderId(),
                             response.getUpdateAccount().getUpdatedBalance()));
                 } else {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
                                     "{0} - Failed to read balance of {1}",
-                                    config.getId(), requestBalance.getAccountPubKey()));
+                                    config.getId(), request.getSenderId()));
                 }
             }
             default -> {
@@ -268,6 +268,8 @@ public class Library {
      * @param response LedgerResponse to verify
      */
     private boolean verifyResponseSignatures(LedgerResponse response) {
+
+        // if(response.getUpdateAccount().getNonces().equals(response.getNonces()))
 
         // Response must have at least small quorum size signatures
         if (response.getSignatures().size() < this.smallQuorumSize)
@@ -324,6 +326,50 @@ public class Library {
                         }
 
                         LedgerResponse response = (LedgerResponse) message;
+                        System.out.println("REPLIES TO: " + response.getRepliesTo());
+                        Integer readNonce = response.getNonce();
+                        if (readNonce != null) { // Means it's a response to a read request
+
+                            // Get pending request associated with nonce
+                            LedgerRequest request = this.requests.get(readNonce);
+                            // If request is not present, it means that it was already processed
+                            if (request == null)
+                                continue;
+
+                            if (request.getType() != Message.Type.BALANCE)
+                                throw new LedgerException(ErrorMessage.InvalidResponse);
+
+                            // Add response to corresponding nonce
+                            this.responses.putIfAbsent(readNonce, new ArrayList<>());
+                            List<LedgerResponse> ledgerResponses = this.responses.get(readNonce);
+                            ledgerResponses.add(response);
+
+                            LedgerRequestBalance requestBalance = new Gson().fromJson(request.getMessage(),
+                                    LedgerRequestBalance.class);
+
+                            switch (requestBalance.getConsistencyMode()) {
+                                case WEAK -> {
+                                    boolean isValidLedgerResponse = this.verifyResponseSignatures(response);
+
+                                    if (!isValidLedgerResponse)
+                                        throw new LedgerException(ErrorMessage.InvalidResponse);
+
+                                    this.logRequestResponse(request, response, response.isSuccessful());
+                                    this.knownConsensusInstance = response.getUpdateAccount()
+                                            .getConsensusInstance();
+
+                                    this.requests.remove(readNonce);
+                                    this.responses.remove(readNonce);
+                                }
+                                case STRONG -> {
+                                    if (ledgerResponses.size() < this.smallQuorumSize)
+                                        break;
+                                }
+                            }
+
+                            return;
+                        }
+
                         /*
                          * If the block that contains the response is valid, an update account with
                          * the updated information about the client is returned with all the signatures
@@ -362,7 +408,7 @@ public class Library {
                                             .findFirst()
                                             .orElseThrow(() -> new LedgerException(ErrorMessage.InvalidResponse));
 
-                                    // Clean to avoid unbouded memory usage
+                                    // Clean to avoid unbounded memory usage
                                     validLedgerResponse.getUpdateAccount().getNonces().forEach(n -> {
                                         this.requests.remove(n);
                                         this.responses.remove(n);
@@ -372,35 +418,6 @@ public class Library {
                                             validLedgerResponse.isSuccessful());
                                     this.knownConsensusInstance = validLedgerResponse.getUpdateAccount()
                                             .getConsensusInstance();
-                                }
-                                case BALANCE -> {
-
-                                    LedgerRequestBalance requestBalance = new Gson().fromJson(request.getMessage(),
-                                            LedgerRequestBalance.class);
-
-                                    switch (requestBalance.getConsistencyMode()) {
-                                        case WEAK -> {
-                                            boolean isValidLedgerResponse = this.verifyResponseSignatures(response);
-
-                                            if (!isValidLedgerResponse)
-                                                throw new LedgerException(ErrorMessage.InvalidResponse);
-
-                                            this.logRequestResponse(request, response, response.isSuccessful());
-                                            this.knownConsensusInstance = response.getUpdateAccount()
-                                                    .getConsensusInstance();
-
-                                        }
-                                        case STRONG -> {
-                                            if (ledgerResponses.size() < this.smallQuorumSize)
-                                                break;
-                                        }
-                                    }
-
-                                    // To use above, just a template for now
-                                    LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Balance of account {1} is {2}", config.getId(),
-                                                    request.getSenderId(),
-                                                    response.getUpdateAccount().getUpdatedBalance()));
                                 }
                                 default -> {
                                     throw new LedgerException(ErrorMessage.CannotParseMessage);

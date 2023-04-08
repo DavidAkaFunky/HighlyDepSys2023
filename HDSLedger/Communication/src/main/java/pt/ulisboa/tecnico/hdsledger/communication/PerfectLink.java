@@ -205,7 +205,7 @@ public class PerfectLink {
                     sleepTime <<= 1;
                 }
 
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {3}:{4} successfully",
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {2}:{3} successfully",
                         config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
@@ -304,8 +304,10 @@ public class PerfectLink {
         // It's not an ACK -> Deserialize for the correct type
         message = new Gson().fromJson(responseData.getMessage(), this.messageClass);
 
+        boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
+        Type originalType = message.getType();
         // Message already received (add returns false if already exists) => Discard
-        if (!receivedMessages.get(message.getSenderId()).add(messageId)) {
+        if (isRepeated) {
             System.out.println("already received: " + message.getType() + " FROM " + message.getSenderId() + " WITH ID "
                     + message.getMessageId());
             message.setType(Message.Type.IGNORE);
@@ -315,8 +317,12 @@ public class PerfectLink {
             case CREATE, BALANCE, TRANSFER -> {
                 return message;
             }
-            case PRE_PREPARE, IGNORE -> {
+            case PRE_PREPARE -> {
                 return message;
+            }
+            case IGNORE -> {
+                if (!originalType.equals(Type.COMMIT) && !originalType.equals(Type.REPLY))
+                    return message;
             }
             case PREPARE -> {
                 ConsensusMessage consensusMessage = (ConsensusMessage) message;

@@ -17,7 +17,7 @@ public class UpdateAccount {
     private Integer consensusInstance;
     // The collection of nonces that were processed in this round
     private List<Integer> nonces;
-
+    // UpdateAccount is part of a valid (or not) block
     private boolean valid;
 
     public UpdateAccount(String ownerId, String hashPubKey, BigDecimal balance, Integer consensusInstance, List<Integer> nonces, boolean isValid) {

@@ -1,6 +1,5 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
-import com.google.gson.GsonBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.service.models.*;
@@ -23,32 +22,39 @@ public class NodeService implements UDPService {
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
     // Blockchain
     private final Map<Integer, Block> blockchain = new ConcurrentHashMap<>();
+
+    // Nodes configurations
+    private final ProcessConfig[] nodesConfig;
     // Clients configurations
     private final ProcessConfig[] clientsConfig;
-    // Link to communicate with blockchain nodes
-    private final PerfectLink link;
     // Current node is leader
     private final ProcessConfig config;
     // Leader configuration
     private final ProcessConfig leaderConfig;
+
+    // Link to communicate with blockchain nodes
+    private final PerfectLink link;
+    // Link to communicate with client nodes
+    private final PerfectLink clientLink;
+
     // Consensus instance -> Round -> List of prepare messages
     private final MessageBucket prepareMessages;
     // Consensus instance -> Round -> List of commit messages
     private final MessageBucket commitMessages;
-    // Map of unconfirmed transactions
-    private final Mempool mempool;
+
+    // Store if already received pre-prepare for a given <consensus, round>
+    private final Map<Integer, Map<Integer, Boolean>> receivedPrePrepare = new ConcurrentHashMap<>();
+    // Consensus instance information per consensus instance
+    private final Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
     // Current consensus instance
     private final AtomicInteger consensusInstance = new AtomicInteger(0);
     // Last decided consensus instance
     private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(0);
-    // Consensus instance information per consensus instance
-    private final Map<Integer, InstanceInfo> instanceInfo = new ConcurrentHashMap<>();
-    // Store if already received pre-prepare for a given <consensus, round>
-    private final Map<Integer, Map<Integer, Boolean>> receivedPrePrepare = new ConcurrentHashMap<>();
-    private final ProcessConfig[] nodesConfig;
-    private final PerfectLink clientLink;
+
     // Store accounts and signatures of updates to accounts
     private final Ledger ledger;
+    // Map of unconfirmed transactions
+    private final Mempool mempool;
 
     public NodeService(ProcessConfig[] clientsConfig, PerfectLink link, PerfectLink clientLink, ProcessConfig config,
             ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Ledger ledger, Mempool mempool) {
@@ -71,10 +77,33 @@ public class NodeService implements UDPService {
         return this.config;
     }
 
-    private void garbageCollect(Block block) {
-        // vai buscar os requests deste bloco
-        // responde a todos e tira-os de la
-        // fazemos set to replyTo com o id que está na nossa mempool
+    public void weakRead(LedgerRequest request) {
+        LedgerRequestBalance requestBalance = request.deserializeBalance();
+        // TODO: Best behavior if lastDecided is smaller than lastKnown
+        // int lastKnownConsenusInstance =
+        // requestBalance.getLastKnownConsensusInstance();
+
+        String publicKeyHash;
+        try {
+            publicKeyHash = RSAEncryption.digest(requestBalance.getAccountPubKey().toString());
+        } catch (NoSuchAlgorithmException e) {
+            return;
+        }
+
+        // Get latest account update and corresponding signatures
+        int localConsensusInstance = this.lastDecidedConsensusInstance.get();
+        UpdateAccount accountUpdate = this.ledger.getAccountUpdate(localConsensusInstance, publicKeyHash);
+        Map<String, String> signatures = this.ledger.getAccountUpdateSignatures(localConsensusInstance, publicKeyHash);
+
+        // Replying with null if account doesn't exist, expected behavior ?
+        LedgerResponse response = new LedgerResponse(this.config.getId(), accountUpdate != null, accountUpdate, signatures,
+                requestBalance.getNonce());
+
+        List<Integer> repliesTo = new ArrayList<>();
+        repliesTo.add(request.getMessageId());
+        response.setRepliesTo(repliesTo);
+
+        this.clientLink.send(request.getSenderId(), response);
     }
 
     /*
@@ -87,7 +116,7 @@ public class NodeService implements UDPService {
      * @return - Map signature -> account update it's signing or empty map if block
      * is invalid
      */
-    public Map<String, UpdateAccount> tryAddBlock(int instance, Block block) {
+    private Map<String, UpdateAccount> tryAddBlock(int instance, Block block) {
 
         // Public key hash -> {nonces}
         Map<String, List<Integer>> nonces = new HashMap<>();
@@ -670,7 +699,8 @@ public class NodeService implements UDPService {
                     .filter(updateAccount -> updateAccount.getNonces().size() > 0) // Safety check
                     .forEach((updateAccount) -> {
                         try {
-                            LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd, updateAccount,
+                            LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd,
+                                    updateAccount,
                                     this.ledger.getAccountUpdateSignatures(consensusInstance,
                                             updateAccount.getHashPubKey()));
 

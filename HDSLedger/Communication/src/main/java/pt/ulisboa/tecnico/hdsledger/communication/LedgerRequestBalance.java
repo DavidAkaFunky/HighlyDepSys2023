@@ -6,6 +6,8 @@ import java.security.PublicKey;
 
 public class LedgerRequestBalance {
 
+    // Client nonce
+    private Integer nonce;
     // Account Public Key
     private String accountPubKey;
     // Consistency mode
@@ -18,10 +20,11 @@ public class LedgerRequestBalance {
         WEAK
     }
 
-    public LedgerRequestBalance(PublicKey accountPubKey, ConsistencyMode consistencyMode, int lastKnownConsensusInstance) {
+    public LedgerRequestBalance(PublicKey accountPubKey, ConsistencyMode consistencyMode, int lastKnownConsensusInstance, int nonce) {
         this.accountPubKey = RSAEncryption.encodePublicKey(accountPubKey);
         this.consistencyMode = consistencyMode;
         this.lastKnownConsensusInstance = lastKnownConsensusInstance;
+        this.nonce = nonce;
     }
 
     public PublicKey getAccountPubKey() {
@@ -46,5 +49,13 @@ public class LedgerRequestBalance {
 
     public void setLastKnownConsensusInstance(int lastKnownConsensusInstance) {
         this.lastKnownConsensusInstance = lastKnownConsensusInstance;
+    }
+
+    public int getNonce() {
+        return this.nonce;
+    }
+
+    public void setNonce(Integer nonce) {
+        this.nonce = nonce;
     }
 }

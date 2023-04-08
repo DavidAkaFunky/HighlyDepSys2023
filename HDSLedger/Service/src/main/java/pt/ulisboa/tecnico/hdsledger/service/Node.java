@@ -60,7 +60,7 @@ public class Node {
             NodeService nodeService = new NodeService(clientConfigs, linkToNodes, linkToClients, nodeConfig, leaderConfig,
                     nodeConfigs, ledger, mempool);
             LedgerService ledgerService = new LedgerService(clientConfigs, linkToClients, nodeConfig,
-                    nodeService, blockSize, ledger, mempool);
+                    nodeService, mempool);
 
             nodeService.listen();
             ledgerService.listen();

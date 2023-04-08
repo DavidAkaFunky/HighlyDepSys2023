@@ -22,7 +22,7 @@ public class Client {
         System.out.println("Your client ID is: " + clientId);
         System.out.println("Type 'create' to create an account.");
         System.out.println(
-                "Type 'transfer <source_id> <destination_id> <amount>' to transfer a given amount from one account to another.");
+                "Type 'transfer <destination_id> <amount>' to transfer a given amount from one account to another.");
         System.out.println("Type 'balance <account_id> <strong|weak>' to read the current account balance.");
         System.out.println("Type 'exit' to exit the program.\n");
     }
@@ -87,27 +87,26 @@ public class Client {
                     library.create();
                 }
                 case "transfer" -> {
-                    if (tokens.length != 4) {
+                    if (tokens.length != 3) {
                         System.out.println("Invalid number of arguments for transfer command.");
                         continue;
                     }
-                    String sourceId = tokens[1];
-                    String destinationId = tokens[2];
-                    BigDecimal amount = new BigDecimal(tokens[3]);
-                    System.out.println("Transferring " + amount + " from " + sourceId + " to " + destinationId + "...");
-                    library.transfer(sourceId, destinationId, amount);
+                    String destinationId = tokens[1];
+                    BigDecimal amount = new BigDecimal(tokens[2]);
+                    System.out.println("Transferring " + amount + " from " + clientId + " to " + destinationId + "...");
+                    library.transfer(clientId, destinationId, amount);
                 }
                 case "balance" -> {
                     if (tokens.length != 3) {
                         System.out.println("Invalid number of arguments for read command.");
                         continue;
                     }
-                    if (!tokens[2].equals("strong") && !tokens[2].equals("weak")) {
+                    String consistencyMode = tokens[2];
+                    if (consistencyMode.equals("strong") && consistencyMode.equals("weak")) {
                         System.out.println("Invalid consistency mode. Use 'strong' or 'weak'.");
                         continue;
                     }
                     String accountId = tokens[1];
-                    String consistencyMode = tokens[2];
                     System.out.println("Reading blockchain with " + consistencyMode + " mode...");
                     ConsistencyMode mode = consistencyMode.equals("strong") ? ConsistencyMode.STRONG
                             : ConsistencyMode.WEAK;

@@ -80,7 +80,7 @@ public class Ledger {
 
     public List<Account> transfer(int consensusInstance, LedgerRequestTransfer request) {
         BigDecimal amount = request.getAmount();
-        if (amount.compareTo(BigDecimal.ZERO) < 0)
+        if (amount.compareTo(BigDecimal.ZERO) <= 0)
             return new ArrayList<>();
 
         String srcHash;
@@ -150,6 +150,10 @@ public class Ledger {
 
     public Map<String, UpdateAccount> getAccountUpdates(int consensusInstance) {
         return accountUpdates.get(consensusInstance);
+    }
+
+    public UpdateAccount getAccountUpdate(int consensusInstance, String publicKeyHash) {
+        return this.accountUpdates.get(consensusInstance).get(publicKeyHash);
     }
 
 }
