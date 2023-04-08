@@ -9,6 +9,9 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
+import java.math.BigDecimal;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
 import java.text.MessageFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,7 +51,7 @@ public class NodeService implements UDPService {
     private final Ledger ledger;
 
     public NodeService(ProcessConfig[] clientsConfig, PerfectLink link, PerfectLink clientLink, ProcessConfig config,
-                       ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Ledger ledger, Mempool mempool) {
+            ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Ledger ledger, Mempool mempool) {
 
         this.clientsConfig = clientsConfig;
         this.link = link;
@@ -87,7 +90,7 @@ public class NodeService implements UDPService {
     public Map<String, UpdateAccount> tryAddBlock(int instance, Block block) {
 
         // Public key hash -> {nonces}
-        Map<String, List<Integer>> nonces = new ConcurrentHashMap<>();
+        Map<String, List<Integer>> nonces = new HashMap<>();
 
         boolean isValid = true;
 
@@ -128,9 +131,10 @@ public class NodeService implements UDPService {
                 case TRANSFER -> {
                     LedgerRequestTransfer transfer = request.deserializeTransfer();
                     List<Account> accounts = this.ledger.transfer(instance, transfer);
-                    if (accounts.size() == 0)
+                    if (accounts.size() == 0) {
                         isValid = false;
-                    else {
+                        break;
+                    } else {
                         appliedTransfers.add(transfer);
 
                         Account srcAccount = accounts.get(0);
@@ -169,8 +173,7 @@ public class NodeService implements UDPService {
             List<Integer> accountNonces = entry.getValue();
             String accountSignature;
             UpdateAccount upAcc = new UpdateAccount(account.getOwnerId(), account.getPublicKeyHash(),
-                    account.getBalance(),
-                    instance, accountNonces);
+                    account.getBalance(), instance, accountNonces, true);
             try {
                 accountSignature = RSAEncryption.sign(upAcc.toJson(), this.config.getPrivateKeyPath());
             } catch (Exception e) {
@@ -185,6 +188,87 @@ public class NodeService implements UDPService {
 
             this.ledger.addAccountUpdate(instance, account.getPublicKeyHash(), upAcc);
         }
+        return accountUpdates;
+    }
+
+    private String hashPubKey(PublicKey pubKey) {
+        String pubKeyHash;
+        try {
+            pubKeyHash = RSAEncryption.digest(pubKey.toString());
+        } catch (NoSuchAlgorithmException e) {
+            return "";
+        }
+        return pubKeyHash;
+    }
+
+    private Map<String, UpdateAccount> createEmptyUpdateAccounts(int instance, Block block) {
+
+        // responder a todos os clientes que tem transacoes no bloco
+        // 1 update account por 1 cliente
+        // essa update account contem todos os nonces que estao no bloco referentes a
+        // esse cliente
+        // guardar os update account no ledger para no uponCommit serem accessiveis
+        // assinar os updates accounts normalmente
+
+        // senderId -> pubKeyHash
+        Map<String, String> senderToPubKeyHash = new HashMap<>();
+        // pubKeyHash -> {nonces}
+        Map<String, List<Integer>> nonces = new HashMap<>();
+
+        List<LedgerRequest> requests = block.getRequests();
+        for (LedgerRequest request : requests) {
+            switch (request.getType()) {
+                case CREATE -> {
+                    LedgerRequestCreate create = request.deserializeCreate();
+                    String pubKeyHash = hashPubKey(create.getAccountPubKey());
+                    nonces.putIfAbsent(pubKeyHash, new ArrayList<>());
+                    nonces.get(pubKeyHash).add(create.getNonce());
+                    senderToPubKeyHash.put(request.getSenderId(), pubKeyHash);
+                }
+                case TRANSFER -> {
+                    LedgerRequestTransfer transfer = request.deserializeTransfer();
+                    String pubKeyHash = hashPubKey(transfer.getSourcePubKey());
+                    nonces.putIfAbsent(pubKeyHash, new ArrayList<>());
+                    nonces.get(pubKeyHash).add(transfer.getNonce());
+                    senderToPubKeyHash.put(request.getSenderId(), pubKeyHash);
+                }
+                case BALANCE -> {
+                    // do nothing
+                }
+                default -> {
+                    // Should never happen
+                    LOGGER.log(Level.INFO, "Invalid request type");
+                }
+            }
+        }
+
+        // signature -> update account
+        Map<String, UpdateAccount> accountUpdates = new HashMap<>();
+        for (Map.Entry<String, String> entry : senderToPubKeyHash.entrySet()) {
+            String senderId = entry.getKey();
+            String pubKeyHash = entry.getValue();
+
+            List<Integer> senderNonces = nonces.get(pubKeyHash);
+
+            UpdateAccount upAcc = new UpdateAccount(senderId, pubKeyHash, BigDecimal.ZERO, instance, senderNonces,
+                    false);
+
+            String accountSignature;
+            try {
+                accountSignature = RSAEncryption.sign(upAcc.toJson(), this.config.getPrivateKeyPath());
+            } catch (Exception e) {
+                LOGGER.log(Level.INFO,
+                        MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
+                                config.getId(), consensusInstance));
+                e.printStackTrace();
+                return new HashMap<>();
+            }
+
+            accountUpdates.put(accountSignature, upAcc);
+
+            this.ledger.addAccountUpdate(instance, pubKeyHash, upAcc);
+        }
+
         return accountUpdates;
     }
 
@@ -438,14 +522,23 @@ public class NodeService implements UDPService {
                     .values();
 
             // Verify transactions validity and update temporary state
-            Map<String, UpdateAccount> updateAccount = this.tryAddBlock(consensusInstance, preparedBlock.get());
+            Map<String, UpdateAccount> accountUpdates = this.tryAddBlock(consensusInstance, preparedBlock.get());
 
+            // If block is invalid, create "invalid" updateAccount with the requests nonce
+            // to reply to
+            // the client requests, this instance will not update the blockchain but the
+            // updateAccounts
+            // will be stored (as invalid)
+            if (accountUpdates.values().size() == 0) {
+                accountUpdates = this.createEmptyUpdateAccounts(consensusInstance, preparedBlock.get());
+            }
 
             // Reply to every prepare message received with the signatures of the updated
             // account
             // This serves as proof that the update is valid (if a quorum of signatures is
             // obtained)
-            CommitMessage c = new CommitMessage(updateAccount.values().stream().toList().get(0).isValid(), updateAccount);
+            CommitMessage c = new CommitMessage(accountUpdates.values().stream().toList().get(0).isValid(),
+                    accountUpdates);
             instance.setCommitMessage(c);
 
             sendersMessage.forEach(senderMessage -> {
@@ -464,13 +557,11 @@ public class NodeService implements UDPService {
 
     /*
      * Verify if the signatures of the updated accounts are valid
-     * The signatures wi
      */
     private boolean verifyAccountSignatures(String senderId, int consensusInstance, CommitMessage message) {
         Map<String, UpdateAccount> accountSignatures = message.getUpdateAccountSignatures();
 
-        if ((message.isValidBlock() && accountSignatures.size() == 0)
-                || (!message.isValidBlock() && accountSignatures.size() != 0))
+        if (accountSignatures.size() == 0)
             return false;
 
         // Get sender public key from config
@@ -555,22 +646,20 @@ public class NodeService implements UDPService {
             instance.setCommittedRound(round);
 
             // They are all the same, so we can just get the first one
-            Map<String, UpdateAccount> accountUpdates = commitQuorum.get().get(0).deserializeCommitMessage()
-                    .getUpdateAccountSignatures();
+            CommitMessage quorumCommitMessage = commitQuorum.get().stream().toList().get(0).deserializeCommitMessage();
+            Map<String, UpdateAccount> accountUpdates = quorumCommitMessage.getUpdateAccountSignatures();
 
-
-            System.out.println("Block was successfully added " + new GsonBuilder().setPrettyPrinting().create()
-                    .toJson(accountUpdates));
+            // Verify if update accounts are valid or not
+            boolean successfulAdd = quorumCommitMessage.isValidBlock();
 
             // Store signatures from other nodes
             commitQuorum.get().forEach((m) -> {
                 String signerId = m.getSenderId();
                 Map<String, UpdateAccount> updates = m.deserializeCommitMessage().getUpdateAccountSignatures();
-                updates.forEach((signature, accountUpdate) -> this.ledger.addAccountUpdateSignature(consensusInstance, accountUpdate.getHashPubKey(),
-                        signerId, signature));
+                updates.forEach((signature, accountUpdate) -> this.ledger.addAccountUpdateSignature(consensusInstance,
+                        accountUpdate.getHashPubKey(), signerId, signature));
             });
 
-            boolean successfulAdd = accountUpdates.values().stream().toList().get(0).isValid();
             if (successfulAdd) {
                 // Apply temporary transactions to account and append block to blockchain
                 this.ledger.commitTransactions(consensusInstance);
@@ -578,10 +667,10 @@ public class NodeService implements UDPService {
             }
             // Reply to clients with the updated account and list of signatures
             accountUpdates.values().stream()
-                    .filter(updateAccount -> updateAccount.getNonces().size() > 0)
+                    .filter(updateAccount -> updateAccount.getNonces().size() > 0) // Safety check
                     .forEach((updateAccount) -> {
                         try {
-                            LedgerResponse response = new LedgerResponse(this.config.getId(), true, updateAccount,
+                            LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd, updateAccount,
                                     this.ledger.getAccountUpdateSignatures(consensusInstance,
                                             updateAccount.getHashPubKey()));
 
@@ -601,18 +690,18 @@ public class NodeService implements UDPService {
                                 List<Integer> repliesTo = new ArrayList<>();
                                 // Remove requests from the mempool that are included in the block
                                 // Store the ids of those requests to then reply to the client
-                                this.instanceInfo.get(consensusInstance).getPreparedBlock().getRequests().stream().forEach(request -> {
-                                    mempool.accept(queue -> {
-                                        for (var storedRequest : queue) {
-                                            System.out.println(storedRequest);
-                                            if (storedRequest.getMessage().equals(request.getMessage())) {
-                                                repliesTo.add(storedRequest.getMessageId());
-                                                mempool.getInnerPool().remove(storedRequest);
-                                                return;
-                                            }
-                                        }
-                                    });
-                                });
+                                this.instanceInfo.get(consensusInstance).getPreparedBlock().getRequests().stream()
+                                        .forEach(request -> {
+                                            mempool.accept(queue -> {
+                                                for (var storedRequest : queue) {
+                                                    if (storedRequest.getMessage().equals(request.getMessage())) {
+                                                        repliesTo.add(storedRequest.getMessageId());
+                                                        mempool.getInnerPool().remove(storedRequest);
+                                                        return;
+                                                    }
+                                                }
+                                            });
+                                        });
                                 response.setRepliesTo(repliesTo);
                             }
 

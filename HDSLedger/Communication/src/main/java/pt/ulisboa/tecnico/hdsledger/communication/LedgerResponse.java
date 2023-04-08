@@ -14,7 +14,7 @@ public class LedgerResponse extends Message {
     private UpdateAccount updateAccount;
     // Signatures of the account update
     private Map<String, String> signatures;
-
+    // 
     private List<Integer> repliesTo = new ArrayList<>();
 
     public LedgerResponse(String senderId, boolean successful) {

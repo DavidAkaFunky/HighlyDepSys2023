@@ -297,17 +297,34 @@ public class Library {
                                                 this.responses.remove(n);
                                             });
 
+                                    boolean isSuccessful = ledgerResponses.get(0).isSuccessful();
+
                                     if (request.getType() == Message.Type.CREATE)
                                         LOGGER.log(Level.INFO,
-                                                MessageFormat.format("{0} - Account {1} was created with balance {2}",
+                                                MessageFormat.format(
+                                                        "{0} - Account {1} was {2} created with balance {3}",
                                                         config.getId(), request.getSenderId(),
+                                                        isSuccessful ? "" : "not",
                                                         response.getUpdateAccount().getUpdatedBalance()));
-                                    else
-                                        LOGGER.log(Level.INFO, MessageFormat.format(
-                                                "{0} - Transfer from {1} to {2} was successful. Current balance is {3}",
-                                                config.getId(), request.getSenderId(),
-                                                response.getUpdateAccount().getUpdatedBalance(),
-                                                response.getUpdateAccount().getUpdatedBalance()));
+                                    else {
+                                        LedgerRequestTransfer requestTransfer = request.deserializeTransfer();
+
+                                        if (isSuccessful) {
+                                            LOGGER.log(Level.INFO, MessageFormat.format(
+                                                    "{0} - Transfer from {1} to {2} was {3}. Current balance is {4}",
+                                                    config.getId(), requestTransfer.getSourcePubKey(),
+                                                    requestTransfer.getDestinationPubKey(),
+                                                    isSuccessful ? "successful" : "unsuccessful",
+                                                    response.getUpdateAccount().getUpdatedBalance()));
+                                        } else {
+                                            LOGGER.log(Level.INFO,
+                                                    MessageFormat.format(
+                                                            "{0} - Transfer from {1} to {2} was unsuccessful.",
+                                                            config.getId(), requestTransfer.getSourcePubKey(),
+                                                            requestTransfer.getDestinationPubKey()));
+                                        }
+                                    }
+
                                     this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
                                 }
                                 case BALANCE -> {
