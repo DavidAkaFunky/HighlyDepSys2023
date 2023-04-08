@@ -18,12 +18,15 @@ public class UpdateAccount {
     // The collection of nonces that were processed in this round
     private List<Integer> nonces;
 
-    public UpdateAccount(String ownerId, String hashPubKey, BigDecimal balance, Integer consensusInstance, List<Integer> nonces) {
+    private boolean valid;
+
+    public UpdateAccount(String ownerId, String hashPubKey, BigDecimal balance, Integer consensusInstance, List<Integer> nonces, boolean isValid) {
         this.ownerId = ownerId;
         this.hashPubKey = hashPubKey;
         this.balance = balance;
         this.consensusInstance = consensusInstance;
         this.nonces = nonces;
+        this.valid = isValid;
     }
 
     public List<Integer> getNonces() {
@@ -48,6 +51,14 @@ public class UpdateAccount {
 
     public Integer getConsensusInstance() {
         return consensusInstance;
+    }
+
+    public void setValid(boolean valid) {
+        this.valid = valid;
+    }
+
+    public boolean isValid() {
+        return valid;
     }
 
     @Override

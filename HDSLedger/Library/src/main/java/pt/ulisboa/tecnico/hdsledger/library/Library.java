@@ -261,6 +261,7 @@ public class Library {
                                 config.getId(), message.getSenderId()));
 
                         LedgerResponse response = (LedgerResponse) message;
+
                         System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(response));
                         List<Integer> nonces = response.getUpdateAccount().getNonces();
                         // Each nonce represent a request sent by this client
