@@ -13,7 +13,8 @@ public enum ErrorMessage {
     CannotParseMessage("Error while parsing received message"),
     InvalidAccount("Invalid account id"),
     FailedToReadPublicKey("Error while reading public key"),
-    NoLeader("Error while getting leader");
+    NoLeader("Error while getting leader"),
+    InvalidResponse("Invalid response to client request");
 
     private final String message;
 

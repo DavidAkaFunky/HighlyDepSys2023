@@ -205,8 +205,8 @@ public class PerfectLink {
                     sleepTime <<= 1;
                 }
 
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} from {2} sent to {3}:{4} successfully",
-                        config.getId(), data.getType(), data.getType(), destAddress, destPort));
+                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Message {1} sent to {3}:{4} successfully",
+                        config.getId(), data.getType(), destAddress, destPort));
             } catch (InterruptedException | UnknownHostException e) {
                 e.printStackTrace();
             }
@@ -306,6 +306,8 @@ public class PerfectLink {
 
         // Message already received (add returns false if already exists) => Discard
         if (!receivedMessages.get(message.getSenderId()).add(messageId)) {
+            System.out.println("already received: " + message.getType() + " FROM " + message.getSenderId() + " WITH ID "
+                    + message.getMessageId());
             message.setType(Message.Type.IGNORE);
         }
 
