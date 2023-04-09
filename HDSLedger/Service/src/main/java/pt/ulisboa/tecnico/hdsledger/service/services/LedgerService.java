@@ -137,11 +137,11 @@ public class LedgerService implements UDPService {
         LedgerRequestBalance balanceRequest = request.deserializeBalance();
 
         switch (balanceRequest.getConsistencyMode()) {
-            case STRONG -> {
-                // TODO
-            }   
-            case WEAK -> {
-                this.service.weakRead(request);
+            case STRONG, WEAK -> {
+                this.service.read(request);
+            }
+            case CONSENSUS -> {
+                
             }
         }
     }

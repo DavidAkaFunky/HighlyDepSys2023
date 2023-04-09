@@ -37,6 +37,8 @@ public class Library {
     private final AtomicInteger nonce = new AtomicInteger(0);
     // Small quorum size (f+1)
     private final int smallQuorumSize;
+    // Big quorum size (2f+1)
+    private final int bigQuorumSize;
     // Known consensus instance (for read-your-writes)
     private int knownConsensusInstance = 0;
 
@@ -50,8 +52,12 @@ public class Library {
         this.nodeConfigs = nodeConfigs;
         this.clientConfigs = clientConfigs;
         this.config = clientConfig;
-        this.smallQuorumSize = Math.floorDiv(nodeConfigs.length - 1, 3) + 1;
 
+        int f = Math.floorDiv(nodeConfigs.length - 1, 3);
+        this.smallQuorumSize = f + 1;
+        this.bigQuorumSize = Math.floorDiv(nodeConfigs.length + f, 2) + 1;
+
+        // n = 3f + 1 <=> f = (n - 1) / 3 => 2f + 1 = (2n + 1) / 3
         // Create link to communicate with nodes
         this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class,
                 activateLogs, 1000);
@@ -196,7 +202,11 @@ public class Library {
         // Add to pending requests map
         this.requests.put(currentNonce, request);
 
-        this.link.smallQuorumMulticast(request);
+        if (consistencyMode.equals(ConsistencyMode.WEAK)){
+            this.link.smallQuorumMulticast(request);
+        } else {
+            this.link.quorumMulticast(request);
+        }
     }
 
     /*
@@ -362,8 +372,25 @@ public class Library {
                                     this.responses.remove(readNonce);
                                 }
                                 case STRONG -> {
-                                    if (ledgerResponses.size() < this.smallQuorumSize)
+                                    if (ledgerResponses.size() < this.bigQuorumSize)
                                         break;
+
+                                    boolean areResponsesValid = ledgerResponses.stream().map(LedgerResponse::getUpdateAccount).distinct().count() <= 1;
+
+                                    if (!areResponsesValid) {
+                                        // TODO
+                                        // request consensus for read
+                                    } 
+
+                                    this.logRequestResponse(request, response, response.isSuccessful());
+                                    this.knownConsensusInstance = response.getUpdateAccount()
+                                            .getConsensusInstance();
+
+                                    this.requests.remove(readNonce);
+                                    this.responses.remove(readNonce);
+                                }
+                                case CONSENSUS -> {
+                                    // TODO
                                 }
                             }
 

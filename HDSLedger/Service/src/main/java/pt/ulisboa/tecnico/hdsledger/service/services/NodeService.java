@@ -79,7 +79,7 @@ public class NodeService implements UDPService {
         return this.config;
     }
 
-    public void weakRead(LedgerRequest request) {
+    public void read(LedgerRequest request) {
         LedgerRequestBalance requestBalance = request.deserializeBalance();
         // TODO: Best behavior if lastDecided is smaller than lastKnown
         // int lastKnownConsensusInstance =
