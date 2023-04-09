@@ -13,6 +13,7 @@ import java.text.MessageFormat;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
@@ -39,6 +40,8 @@ public class PerfectLink {
     private final CollapsingSet receivedAcks = new CollapsingSet();
     // Message counter
     private final AtomicInteger messageCounter = new AtomicInteger(0);
+    // Send messages to self by pushing to queue instead of through the network
+    private final Queue<Message> localhostQueue = new ConcurrentLinkedQueue<>();
 
     public PerfectLink(ProcessConfig self, int port, ProcessConfig[] nodes, Class<? extends Message> messageClass) {
         this(self, port, nodes, messageClass, true, 200);
@@ -173,7 +176,7 @@ public class PerfectLink {
         new Thread(() -> {
             try {
                 ProcessConfig node = nodes.get(nodeId);
-                if (node == null) 
+                if (node == null)
                     throw new LedgerException(ErrorMessage.NoSuchNode);
 
                 data.setMessageId(messageCounter.getAndIncrement());
@@ -186,6 +189,17 @@ public class PerfectLink {
                 int sleepTime = BASE_SLEEP_TIME;
 
                 System.out.println("SENDING TO " + nodeId + " at " + destPort + " " + destAddress.getHostName());
+
+                // Send message to local queue instead of using network if destination in self
+                if (nodeId.equals(this.config.getId())) {
+                    this.localhostQueue.add(data);
+
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format("{0} - Message {1} (locally) sent to {2}:{3} successfully",
+                                    config.getId(), data.getType(), destAddress, destPort));
+
+                    return;
+                }
 
                 for (;;) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
@@ -258,35 +272,47 @@ public class PerfectLink {
      */
     public Message receive() throws IOException, ClassNotFoundException {
 
-        byte[] buf = new byte[8192];
-        DatagramPacket response = new DatagramPacket(buf, buf.length);
+        Message message;
+        Boolean local = false;
+        SignedMessage responseData = null;
+        DatagramPacket response = null;
+        
+        if (this.localhostQueue.size() > 0) {
+            message = this.localhostQueue.poll();
+            local = true; 
+            this.receivedAcks.add(message.getMessageId());
+        } else {
+            byte[] buf = new byte[65535];
+            response = new DatagramPacket(buf, buf.length);
 
-        socket.receive(response);
+            socket.receive(response);
 
-        byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
-        SignedMessage responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
-        Message message = new Gson().fromJson(responseData.getMessage(), Message.class);
+            byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
+            responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
+            message = new Gson().fromJson(responseData.getMessage(), Message.class);
 
-        System.out.println("RECEIVED " + message.getType() + " FROM " + message.getSenderId() + " WITH ID "
-                + message.getMessageId());
+            System.out.println("RECEIVED " + message.getType() + " FROM " + message.getSenderId() + " WITH ID "
+                    + message.getMessageId());
 
-        // Verify signature (byzantine nodes will avoid it to cooperate with each other)
-        // BYZANTINE_TESTS
-        // Any byzantine node will not verify signatures
-        if (config.getByzantineBehavior() == ByzantineBehavior.NONE
-                && !RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
-                        nodes.get(message.getSenderId()).getPublicKeyPath())) {
-            message.setType(Message.Type.IGNORE);
+            // Verify signature (byzantine nodes will avoid it to cooperate with each other)
+            // BYZANTINE_TESTS
+            // Any byzantine node will not verify signatures
+            if (config.getByzantineBehavior() == ByzantineBehavior.NONE
+                    && !RSAEncryption.verifySignature(responseData.getMessage(), responseData.getSignature(),
+                            nodes.get(message.getSenderId()).getPublicKeyPath())) {
+                message.setType(Message.Type.IGNORE);
 
-            LOGGER.log(Level.INFO, MessageFormat.format(
-                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                            + "@      WARNING: INVALID MESSAGE SIGNATURE!      @\n"
-                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                            + "IT IS POSSIBLE THAT NODE {0}:{1} IS DOING SOMETHING NASTY!",
-                    InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
+                LOGGER.log(Level.INFO, MessageFormat.format(
+                        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "@      WARNING: INVALID MESSAGE SIGNATURE!      @\n"
+                                + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "IT IS POSSIBLE THAT NODE {0}:{1} IS DOING SOMETHING NASTY!",
+                        InetAddress.getByName(response.getAddress().getHostName()), response.getPort()));
 
-            return message;
+                return message;
+            }
         }
+
 
         String senderId = message.getSenderId();
         int messageId = message.getMessageId();
@@ -302,7 +328,8 @@ public class PerfectLink {
         }
 
         // It's not an ACK -> Deserialize for the correct type
-        message = new Gson().fromJson(responseData.getMessage(), this.messageClass);
+        if (!local)
+            message = new Gson().fromJson(responseData.getMessage(), this.messageClass);
 
         boolean isRepeated = !receivedMessages.get(message.getSenderId()).add(messageId);
         Type originalType = message.getType();
@@ -328,7 +355,7 @@ public class PerfectLink {
                 ConsensusMessage consensusMessage = (ConsensusMessage) message;
                 if (consensusMessage.getReplyTo() != null && consensusMessage.getReplyTo().equals(config.getId()))
                     receivedAcks.add(consensusMessage.getReplyToMessageId());
-                
+
                 return message;
             }
             case COMMIT -> {
@@ -344,18 +371,20 @@ public class PerfectLink {
                 System.out.println("que mensagem vai responder com um ack: " + message.getType());
             }
         }
-            
-        InetAddress address = InetAddress.getByName(response.getAddress().getHostAddress());
-        int port = response.getPort();
 
-        Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
-        responseMessage.setMessageId(messageId);
+        if (!local) {
+            InetAddress address = InetAddress.getByName(response.getAddress().getHostAddress());
+            int port = response.getPort();
 
-        // ACK is sent without needing for another ACK because
-        // we're assuming an eventually synchronous network
-        // Even if a node receives the message multiple times,
-        // it will discard duplicates
-        unreliableSend(address, port, responseMessage);
+            Message responseMessage = new Message(this.config.getId(), Message.Type.ACK);
+            responseMessage.setMessageId(messageId);
+            // ACK is sent without needing for another ACK because
+            // we're assuming an eventually synchronous network
+            // Even if a node receives the message multiple times,
+            // it will discard duplicates
+            unreliableSend(address, port, responseMessage);
+        }
+        
         return message;
     }
 }

@@ -229,7 +229,7 @@ public class Library {
                 if (isSuccessful) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Transfer from {1} to {2} was successful. Current balance is {3}",
-                            config.getId(), requestTransfer.getSourcePubKey().toString(),
+                            config.getId(), requestTransfer.getSourcePubKey(),
                             requestTransfer.getDestinationPubKey().toString(),
                             response.getUpdateAccount().getUpdatedBalance()));
                 } else {
@@ -311,10 +311,10 @@ public class Library {
                             case ACK -> {
                                 LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK {1} message from {2}",
                                         config.getId(), message.getMessageId(), message.getSenderId()));
-                                return;
+                                continue;
                             }
                             case IGNORE -> {
-                                return;
+                                continue;
                             }
                             case REPLY -> {
                                 LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received REPLY message from {1}",
@@ -367,7 +367,7 @@ public class Library {
                                 }
                             }
 
-                            return;
+                            continue;
                         }
 
                         /*

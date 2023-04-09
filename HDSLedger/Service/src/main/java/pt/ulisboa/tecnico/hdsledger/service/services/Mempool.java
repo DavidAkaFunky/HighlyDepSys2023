@@ -3,13 +3,12 @@ package pt.ulisboa.tecnico.hdsledger.service.services;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 
-import java.net.PasswordAuthentication;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.function.Consumer;
-import java.util.logging.Handler;
+
+import com.google.gson.GsonBuilder;
 
 public class Mempool {
 
@@ -55,5 +54,9 @@ public class Mempool {
         synchronized (this.pool) {
             handler.accept(this.pool);
         }
+    }
+
+    public String toString() {
+        return new GsonBuilder().setPrettyPrinting().create().toJson(this.pool);
     }
 }

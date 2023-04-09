@@ -16,6 +16,7 @@ public class LedgerRequestBalance {
     private int lastKnownConsensusInstance;
 
     public enum ConsistencyMode {
+        CONSENSUS,
         STRONG,
         WEAK
     }

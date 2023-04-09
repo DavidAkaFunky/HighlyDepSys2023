@@ -67,6 +67,8 @@ public class Client {
         String prompt = String.format("[%s @ HDSLedger]$ ", clientId);
         while (true) {
 
+            System.out.flush();
+            System.out.println();
             System.out.print(prompt);
             line = scanner.nextLine();
 
@@ -102,7 +104,7 @@ public class Client {
                         continue;
                     }
                     String consistencyMode = tokens[2];
-                    if (consistencyMode.equals("strong") && consistencyMode.equals("weak")) {
+                    if (!consistencyMode.equals("strong") && !consistencyMode.equals("weak")) {
                         System.out.println("Invalid consistency mode. Use 'strong' or 'weak'.");
                         continue;
                     }

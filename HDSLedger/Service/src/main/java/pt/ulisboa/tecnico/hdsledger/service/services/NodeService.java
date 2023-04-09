@@ -17,6 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
+import com.google.gson.Gson;
+
 public class NodeService implements UDPService {
 
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
@@ -80,7 +82,7 @@ public class NodeService implements UDPService {
     public void weakRead(LedgerRequest request) {
         LedgerRequestBalance requestBalance = request.deserializeBalance();
         // TODO: Best behavior if lastDecided is smaller than lastKnown
-        // int lastKnownConsenusInstance =
+        // int lastKnownConsensusInstance =
         // requestBalance.getLastKnownConsensusInstance();
 
         String publicKeyHash;
@@ -92,11 +94,17 @@ public class NodeService implements UDPService {
 
         // Get latest account update and corresponding signatures
         int localConsensusInstance = this.lastDecidedConsensusInstance.get();
-        UpdateAccount accountUpdate = this.ledger.getAccountUpdate(localConsensusInstance, publicKeyHash);
-        Map<String, String> signatures = this.ledger.getAccountUpdateSignatures(localConsensusInstance, publicKeyHash);
+        UpdateAccount accountUpdate;
+        do {
+            accountUpdate = this.ledger.getAccountUpdate(localConsensusInstance, publicKeyHash);
+        } while ((accountUpdate == null || !accountUpdate.isValid()) && localConsensusInstance-- > 0);
+
+        Map<String, String> signatures = this.ledger.getAccountUpdateSignatures(accountUpdate.getConsensusInstance(),
+                publicKeyHash);
 
         // Replying with null if account doesn't exist, expected behavior ?
-        LedgerResponse response = new LedgerResponse(this.config.getId(), accountUpdate != null, accountUpdate, signatures,
+        LedgerResponse response = new LedgerResponse(this.config.getId(), accountUpdate != null, accountUpdate,
+                signatures,
                 requestBalance.getNonce());
 
         List<Integer> repliesTo = new ArrayList<>();
@@ -166,14 +174,13 @@ public class NodeService implements UDPService {
                     } else {
                         appliedTransfers.add(transfer);
 
-                        Account srcAccount = accounts.get(0);
-                        List<Integer> srcAccountNonces = nonces.getOrDefault(srcAccount, new ArrayList<>());
-                        srcAccountNonces.add(transfer.getNonce());
-                        nonces.put(srcAccount.getPublicKeyHash(), srcAccountNonces);
+                        // Create two UpdateAccounts (one with a nonce and the other empty)
+                        String srcAccount = accounts.get(0).getPublicKeyHash();
+                        nonces.putIfAbsent(srcAccount, new ArrayList<>());
+                        nonces.get(srcAccount).add(transfer.getNonce());
 
-                        Account destAccount = accounts.get(1);
-                        List<Integer> destAccountNonces = nonces.getOrDefault(destAccount, new ArrayList<>());
-                        nonces.put(destAccount.getPublicKeyHash(), destAccountNonces);
+                        String destAccount = accounts.get(1).getPublicKeyHash();
+                        nonces.putIfAbsent(destAccount, new ArrayList<>());
                     }
                 }
                 default -> {
@@ -694,6 +701,14 @@ public class NodeService implements UDPService {
                 this.ledger.commitTransactions(consensusInstance);
                 this.blockchain.put(consensusInstance, instance.getPreparedBlock());
             }
+
+            System.out.println(
+                    "------------------------------------------ PRINTING IMPORTANT STUFF ------------------------------------------");
+            System.out.println(new Gson().toJson(accountUpdates.values().stream().toList()));
+            System.out.println(mempool.toString());
+            System.out
+                    .println("------------------------------------------  ------------------------------------------");
+
             // Reply to clients with the updated account and list of signatures
             accountUpdates.values().stream()
                     .filter(updateAccount -> updateAccount.getNonces().size() > 0) // Safety check
@@ -701,7 +716,8 @@ public class NodeService implements UDPService {
                         try {
                             LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd,
                                     updateAccount,
-                                    this.ledger.getAccountUpdateSignatures(consensusInstance,
+                                    this.ledger.getAccountUpdateSignatures(
+                                            consensusInstance,
                                             updateAccount.getHashPubKey()));
 
                             if (this.config.isLeader()) {
@@ -721,6 +737,7 @@ public class NodeService implements UDPService {
                                 // Remove requests from the mempool that are included in the block
                                 // Store the ids of those requests to then reply to the client
                                 this.instanceInfo.get(consensusInstance).getPreparedBlock().getRequests().stream()
+                                        .filter(r -> r.getSenderId().equals(updateAccount.getOwnerId()))
                                         .forEach(request -> {
                                             mempool.accept(queue -> {
                                                 for (var storedRequest : queue) {

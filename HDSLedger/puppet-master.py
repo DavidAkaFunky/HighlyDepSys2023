@@ -22,7 +22,7 @@ server_configs = [
     "bad_consensus_config.json",
 ]
 server_config = server_configs[0]
-block_size = 1
+block_size = 3
 
 def quit_handler(*args):
     os.system(f"pkill -i {terminal}")
