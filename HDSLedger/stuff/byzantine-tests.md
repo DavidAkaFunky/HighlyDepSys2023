@@ -108,8 +108,8 @@ byzantineBroadcast() {
         "id": "1",
         "isLeader": true,
         "hostname": "localhost",
-        "port": 3000,
-        "clientPort": 4000,
+        "port": 3001,
+        "clientPort": 4001,
         "publicKeyPath": "../PKI/node1.pub",
         "privateKeyPath": "../PKI/node1.priv"
     },

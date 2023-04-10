@@ -85,9 +85,6 @@ public class MessageBucket {
             messages.put(hash, msgs);
         });
 
-        System.out.println("INSIDE VALID COMMIT QUORUM");
-        System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(messages));
-
         // Only one value (if any, thus the optional) will have a frequency
         // greater than or equal to the quorum size
         return messages.values().stream().filter(

@@ -188,8 +188,6 @@ public class PerfectLink {
                 int messageId = data.getMessageId();
                 int sleepTime = BASE_SLEEP_TIME;
 
-                System.out.println("SENDING TO " + nodeId + " at " + destPort + " " + destAddress.getHostName());
-
                 // Send message to local queue instead of using network if destination in self
                 if (nodeId.equals(this.config.getId())) {
                     this.localhostQueue.add(data);
@@ -290,9 +288,6 @@ public class PerfectLink {
             byte[] buffer = Arrays.copyOfRange(response.getData(), 0, response.getLength());
             responseData = new Gson().fromJson(new String(buffer), SignedMessage.class);
             message = new Gson().fromJson(responseData.getMessage(), Message.class);
-
-            System.out.println("RECEIVED " + message.getType() + " FROM " + message.getSenderId() + " WITH ID "
-                    + message.getMessageId());
 
             // Verify signature (byzantine nodes will avoid it to cooperate with each other)
             // BYZANTINE_TESTS

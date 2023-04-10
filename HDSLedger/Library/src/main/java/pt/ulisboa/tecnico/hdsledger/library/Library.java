@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.library;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestBalance.ConsistencyMode;
@@ -253,6 +254,7 @@ public class Library {
                 }
             }
             case BALANCE -> {
+                System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(response));
                 if (isSuccessful) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Balance of {1} is {2}",

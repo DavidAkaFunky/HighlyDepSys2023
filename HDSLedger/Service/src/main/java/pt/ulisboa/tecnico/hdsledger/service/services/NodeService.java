@@ -61,6 +61,8 @@ public class NodeService implements UDPService {
     private final Ledger ledger;
     // Map of unconfirmed transactions
     private final Mempool mempool;
+    // Account refresh threshold (# instances)
+    private final int refreshThreshold = 2;
 
     public NodeService(ProcessConfig[] clientsConfig, PerfectLink link, PerfectLink clientLink, ProcessConfig config,
             ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Mempool mempool) {
@@ -225,6 +227,15 @@ public class NodeService implements UDPService {
             while (li.hasPrevious())
                 this.ledger.revertTransfer(li.previous());
             return new HashMap<>();
+        }
+        
+        // Refresh stale update accounts
+        for (Account account : this.ledger.getAccounts().values()) {
+            UpdateAccount mostRecentUpdateAccount = account.getMostRecentUpdateAccount();
+            if (mostRecentUpdateAccount != null && instance - mostRecentUpdateAccount.getConsensusInstance() >= this.refreshThreshold) {
+                System.out.println("REFRESHING ACCOUNT WITH OWNER ID " + account.getOwnerId());
+                nonces.putIfAbsent(account.getPublicKeyHash(), new ArrayList<>());
+            }
         }
 
         // Create account updates and sign them
@@ -725,15 +736,8 @@ public class NodeService implements UDPService {
             if (successfulAdd) {
                 // Apply temporary transactions to account and append block to blockchain
                 this.ledger.commitTransactions(consensusInstance);
-                this.blockchain.put(consensusInstance, instance.getPreparedBlock());
+                System.out.println("------------------------------------------  ------------------------------------------");
             }
-
-            System.out.println(
-                    "------------------------------------------ PRINTING IMPORTANT STUFF ------------------------------------------");
-            System.out.println(new Gson().toJson(accountUpdates.values().stream().toList()));
-            System.out.println(mempool.toString());
-            System.out
-                    .println("------------------------------------------  ------------------------------------------");
 
             // Reply to clients with the updated account and list of signatures
             accountUpdates.values().stream()
