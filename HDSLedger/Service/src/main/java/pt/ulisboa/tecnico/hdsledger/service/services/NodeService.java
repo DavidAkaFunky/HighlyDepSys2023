@@ -63,7 +63,7 @@ public class NodeService implements UDPService {
     private final Mempool mempool;
 
     public NodeService(ProcessConfig[] clientsConfig, PerfectLink link, PerfectLink clientLink, ProcessConfig config,
-            ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Ledger ledger, Mempool mempool) {
+            ProcessConfig leaderConfig, ProcessConfig[] nodesConfig, Mempool mempool) {
 
         this.clientsConfig = clientsConfig;
         this.link = link;
@@ -72,27 +72,27 @@ public class NodeService implements UDPService {
         this.leaderConfig = leaderConfig;
         this.nodesConfig = nodesConfig;
 
-        this.ledger = ledger;
         this.mempool = mempool;
-
+        
         this.prepareMessages = new MessageBucket(nodesConfig.length);
         this.commitMessages = new MessageBucket(nodesConfig.length);
-
+        
         try {
             this.leaderPublicKey = RSAEncryption.readPublicKey(leaderConfig.getPublicKeyPath());
             this.leaderPublicKeyHash = RSAEncryption.digest(this.leaderPublicKey.toString());
         } catch (Exception e) {
             throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
         }
-
-        Account leaderAccount = new Account(this.leaderConfig.getId(), this.leaderPublicKeyHash);
-        this.ledger.getTemporaryAccounts().put(this.leaderPublicKeyHash, leaderAccount);
-        leaderAccount = new Account(this.leaderConfig.getId(), this.leaderPublicKeyHash);
-        this.ledger.getAccounts().put(this.leaderPublicKeyHash, leaderAccount);
+        
+        this.ledger = new Ledger(this.leaderConfig.getId(), this.leaderPublicKeyHash);
     }
 
     public ProcessConfig getConfig() {
         return this.config;
+    }
+
+    public int getConsensusInstance() {
+        return this.consensusInstance.get();
     }
 
     public void read(LedgerRequest request) {

@@ -30,7 +30,14 @@ public class Ledger {
     // signature
     private final Map<Integer, Map<String, Map<String, String>>> accountUpdateSignatures = new ConcurrentHashMap<>();
 
-    public Ledger() {
+    private final BigDecimal fee = BigDecimal.ONE;
+
+    private Account temporaryLeaderAccount;
+
+    public Ledger(String leaderId, String leaderPublicKeyHash) {
+        this.temporaryLeaderAccount = new Account(leaderId, leaderPublicKeyHash);
+        this.temporaryAccounts.put(leaderPublicKeyHash, this.temporaryLeaderAccount);
+        this.accounts.put(leaderPublicKeyHash, new Account(leaderId, leaderPublicKeyHash));
     }
 
     public Map<String, Account> getAccounts() {
@@ -58,21 +65,27 @@ public class Ledger {
 
     public Optional<Account> createAccount(String ownerId, PublicKey publicKey, PublicKey leaderPublicKey) {
         String publicKeyHash;
+        String leaderPublicKeyHash;
         try {
             publicKeyHash = RSAEncryption.digest(publicKey.toString());
+            leaderPublicKeyHash = RSAEncryption.digest(leaderPublicKey.toString());
         } catch (NoSuchAlgorithmException e) {
             return Optional.empty();
         }
+
         // Put returns null if the key was not present
         Account acc = new Account(ownerId, publicKeyHash);
-        if (temporaryAccounts.put(publicKeyHash, acc) == null) {
-            return Optional.of(acc);
+        if (temporaryAccounts.put(publicKeyHash, acc) != null) {
+            return Optional.empty();
         }
-
+        
         // Pay leader a fee
-        acc.subtractBalance(BigDecimal.ONE);
-
-        return Optional.empty();
+        acc.subtractBalance(this.fee);
+        
+        Account leaderAccount = temporaryAccounts.get(leaderPublicKeyHash);
+        leaderAccount.addBalance(this.fee);
+        
+        return Optional.of(acc);
     }
 
     public void revertCreateAccount(LedgerRequestCreate request) {
@@ -101,21 +114,25 @@ public class Ledger {
 
         String srcHash;
         String destHash;
+        String leaderHash;
         try {
             srcHash = RSAEncryption.digest(sourcePubKey.toString());
             destHash = RSAEncryption.digest(destinationPubKey.toString());
+            leaderHash = RSAEncryption.digest(leaderPubKey.toString());
         } catch (NoSuchAlgorithmException e) {
             return new ArrayList<>();
         }
 
         Account srcAccount = temporaryAccounts.get(srcHash);
-        Account destAccount = temporaryAccounts.get(destHash);            
+        Account destAccount = temporaryAccounts.get(destHash);
+        Account leaderAccount = temporaryAccounts.get(leaderHash);            
         // include in the subtract the leader fee
-        if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(amount.add(BigDecimal.ONE))) {
+        if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(amount.add(this.fee))) {
             return new ArrayList<>();
         }
 
         destAccount.addBalance(amount);
+        leaderAccount.addBalance(this.fee);
         List<Account> accounts = new ArrayList<>();
         accounts.add(srcAccount);
         accounts.add(destAccount);

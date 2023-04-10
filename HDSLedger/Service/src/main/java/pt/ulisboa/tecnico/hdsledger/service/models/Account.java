@@ -42,6 +42,7 @@ public class Account {
 
     public void addBalance(BigDecimal amount) {
         this.balance = this.balance.add(amount);
+        System.out.println("JUST ADDED " + amount + " TO " + this.ownerId + " BALANCE: " + this.balance);
     }
 
     public boolean subtractBalance(BigDecimal amount) {

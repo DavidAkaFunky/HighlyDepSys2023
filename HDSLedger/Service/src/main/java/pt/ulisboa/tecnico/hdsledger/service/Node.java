@@ -53,12 +53,11 @@ public class Node {
                     LedgerRequest.class);
 
             // Shared entities
-            Ledger ledger = new Ledger();
             Mempool mempool = new Mempool(blockSize);
 
             // Services that implement listen from UDPService
             NodeService nodeService = new NodeService(clientConfigs, linkToNodes, linkToClients, nodeConfig, leaderConfig,
-                    nodeConfigs, ledger, mempool);
+                    nodeConfigs, mempool);
             LedgerService ledgerService = new LedgerService(clientConfigs, linkToClients, nodeConfig,
                     nodeService, mempool, leaderConfig);
 

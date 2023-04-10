@@ -65,7 +65,7 @@ public class Library {
 
         // Create link to communicate with nodes
         this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class,
-                activateLogs, 1000);
+                activateLogs, 5000);
 
         // Disable logs if necessary
         if (!activateLogs) {
@@ -229,7 +229,7 @@ public class Library {
                 if (isSuccessful) {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
-                                    "{0} - Account {1} was created with balance {2}",
+                                    "{0} - Account {1} was created. Current balance is {2}",
                                     config.getId(), request.getSenderId(),
                                     response.getUpdateAccount().getUpdatedBalance()));
                 } else {
@@ -243,16 +243,13 @@ public class Library {
                 LedgerRequestTransfer requestTransfer = request.deserializeTransfer();
                 if (isSuccessful) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
-                            "{0} - Transfer from {1} to {2} was successful. Current balance is {3}",
-                            config.getId(), requestTransfer.getSourcePubKey(),
-                            requestTransfer.getDestinationPubKey().toString(),
-                            response.getUpdateAccount().getUpdatedBalance()));
+                            "{0} - Transfer was successful. Current balance is {1}",
+                            config.getId(), response.getUpdateAccount().getUpdatedBalance()));
                 } else {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
-                                    "{0} - Transfer from {1} to {2} was unsuccessful.",
-                                    config.getId(), requestTransfer.getSourcePubKey().toString(),
-                                    requestTransfer.getDestinationPubKey().toString()));
+                                    "{0} - Transfer was unsuccessful.",
+                                    config.getId()));
                 }
             }
             case BALANCE -> {
@@ -441,10 +438,8 @@ public class Library {
                                             .orElseThrow(() -> new LedgerException(ErrorMessage.InvalidResponse));
 
                                     // Clean to avoid unbounded memory usage
-                                    validLedgerResponse.getUpdateAccount().getNonces().forEach(n -> {
-                                        this.requests.remove(n);
-                                        this.responses.remove(n);
-                                    });
+                                    this.requests.remove(nonce);
+                                    this.responses.remove(nonce);
 
                                     this.logRequestResponse(request, validLedgerResponse,
                                             validLedgerResponse.isSuccessful());
