@@ -4,6 +4,8 @@ import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.service.models.*;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
+import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
+import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
@@ -33,6 +35,9 @@ public class NodeService implements UDPService {
     private final ProcessConfig config;
     // Leader configuration
     private final ProcessConfig leaderConfig;
+    // Leader public key and hash
+    private final PublicKey leaderPublicKey;
+    private final String leaderPublicKeyHash;
 
     // Link to communicate with blockchain nodes
     private final PerfectLink link;
@@ -52,7 +57,6 @@ public class NodeService implements UDPService {
     private final AtomicInteger consensusInstance = new AtomicInteger(0);
     // Last decided consensus instance
     private final AtomicInteger lastDecidedConsensusInstance = new AtomicInteger(0);
-
     // Store accounts and signatures of updates to accounts
     private final Ledger ledger;
     // Map of unconfirmed transactions
@@ -73,6 +77,18 @@ public class NodeService implements UDPService {
 
         this.prepareMessages = new MessageBucket(nodesConfig.length);
         this.commitMessages = new MessageBucket(nodesConfig.length);
+
+        try {
+            this.leaderPublicKey = RSAEncryption.readPublicKey(leaderConfig.getPublicKeyPath());
+            this.leaderPublicKeyHash = RSAEncryption.digest(this.leaderPublicKey.toString());
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+        }
+
+        Account leaderAccount = new Account(this.leaderConfig.getId(), this.leaderPublicKeyHash);
+        this.ledger.getTemporaryAccounts().put(this.leaderPublicKeyHash, leaderAccount);
+        leaderAccount = new Account(this.leaderConfig.getId(), this.leaderPublicKeyHash);
+        this.ledger.getAccounts().put(this.leaderPublicKeyHash, leaderAccount);
     }
 
     public ProcessConfig getConfig() {
@@ -138,7 +154,8 @@ public class NodeService implements UDPService {
         for (LedgerRequest request : requests) {
             if (request.getType() == LedgerRequest.Type.CREATE) {
                 LedgerRequestCreate create = request.deserializeCreate();
-                Optional<Account> newAcc = this.ledger.createAccount(request.getSenderId(), create);
+                Optional<Account> newAcc = this.ledger.createAccount(request.getSenderId(), create.getAccountPubKey(),
+                        this.leaderPublicKey);
                 if (newAcc.isEmpty()) {
                     isValid = false;
                     break;
@@ -147,6 +164,9 @@ public class NodeService implements UDPService {
                     List<Integer> nonceSet = new ArrayList<>();
                     nonceSet.add(create.getNonce());
                     nonces.put(newAcc.get().getPublicKeyHash(), nonceSet);
+
+                    // create update account for leader account
+                    nonces.putIfAbsent(this.leaderPublicKeyHash, new ArrayList<>());
                 }
             }
         }
@@ -167,7 +187,10 @@ public class NodeService implements UDPService {
                     /* Already processed */ }
                 case TRANSFER -> {
                     LedgerRequestTransfer transfer = request.deserializeTransfer();
-                    List<Account> accounts = this.ledger.transfer(instance, transfer);
+                    List<Account> accounts = this.ledger.transfer(instance, transfer.getAmount(),
+                            transfer.getSourcePubKey(),
+                            transfer.getDestinationPubKey(),
+                            this.leaderPublicKey);
                     if (accounts.size() == 0) {
                         isValid = false;
                         break;
@@ -181,6 +204,9 @@ public class NodeService implements UDPService {
 
                         String destAccount = accounts.get(1).getPublicKeyHash();
                         nonces.putIfAbsent(destAccount, new ArrayList<>());
+
+                        // create update account for leader account
+                        nonces.putIfAbsent(this.leaderPublicKeyHash, new ArrayList<>());
                     }
                 }
                 default -> {
@@ -743,7 +769,7 @@ public class NodeService implements UDPService {
                                                 for (var storedRequest : queue) {
                                                     if (storedRequest.getMessage().equals(request.getMessage())) {
                                                         repliesTo.add(storedRequest.getMessageId());
-                                                        mempool.getInnerPool().remove(storedRequest);
+                                                        mempool.removeRequest(storedRequest);
                                                         return;
                                                     }
                                                 }

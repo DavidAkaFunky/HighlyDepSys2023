@@ -1,7 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.library;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 
 import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestBalance.ConsistencyMode;
@@ -24,6 +23,8 @@ public class Library {
     private final ProcessConfig[] clientConfigs;
     // Nodes configs
     private final ProcessConfig[] nodeConfigs;
+    // All configs
+    private final ProcessConfig[] allConfigs;
     // Client identifier
     private final ProcessConfig config;
     // Responses received from the nodes <nonce, responses[]>, its an array because
@@ -58,6 +59,10 @@ public class Library {
         this.bigQuorumSize = Math.floorDiv(nodeConfigs.length + f, 2) + 1;
 
         // n = 3f + 1 <=> f = (n - 1) / 3 => 2f + 1 = (2n + 1) / 3
+        this.allConfigs = new ProcessConfig[nodeConfigs.length + clientConfigs.length];
+        System.arraycopy(nodeConfigs, 0, this.allConfigs, 0, nodeConfigs.length);
+        System.arraycopy(clientConfigs, 0, this.allConfigs, nodeConfigs.length, clientConfigs.length);
+
         // Create link to communicate with nodes
         this.link = new PerfectLink(clientConfig, clientConfig.getPort(), nodeConfigs, LedgerResponse.class,
                 activateLogs, 1000);
@@ -172,7 +177,7 @@ public class Library {
         int currentNonce = this.nonce.getAndIncrement();
 
         // Get account public key
-        Optional<ProcessConfig> accountConfig = Arrays.stream(this.clientConfigs)
+        Optional<ProcessConfig> accountConfig = Arrays.stream(this.allConfigs)
                 .filter(c -> c.getId().equals(accountId)).findFirst();
         if (accountConfig.isEmpty())
             throw new LedgerException(ErrorMessage.InvalidAccount);

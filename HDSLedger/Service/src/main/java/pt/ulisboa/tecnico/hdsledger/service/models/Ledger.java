@@ -33,6 +33,14 @@ public class Ledger {
     public Ledger() {
     }
 
+    public Map<String, Account> getAccounts() {
+        return accounts;
+    }
+
+    public Map<String, Account> getTemporaryAccounts() {
+        return temporaryAccounts;
+    }
+
     public void addAccountUpdateSignature(int consensusInstance, String publicKeyHash, String signerId,
             String signature) {
         accountUpdateSignatures.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
@@ -48,8 +56,7 @@ public class Ledger {
         return accountUpdateSignatures;
     }
 
-    public Optional<Account> createAccount(String ownerId, LedgerRequestCreate request) {
-        PublicKey publicKey = request.getAccountPubKey();
+    public Optional<Account> createAccount(String ownerId, PublicKey publicKey, PublicKey leaderPublicKey) {
         String publicKeyHash;
         try {
             publicKeyHash = RSAEncryption.digest(publicKey.toString());
@@ -61,6 +68,10 @@ public class Ledger {
         if (temporaryAccounts.put(publicKeyHash, acc) == null) {
             return Optional.of(acc);
         }
+
+        // Pay leader a fee
+        acc.subtractBalance(BigDecimal.ONE);
+
         return Optional.empty();
     }
 
@@ -78,23 +89,29 @@ public class Ledger {
         temporaryAccounts.remove(publicKeyHash);
     }
 
-    public List<Account> transfer(int consensusInstance, LedgerRequestTransfer request) {
-        BigDecimal amount = request.getAmount();
+    public List<Account> transfer(
+        int consensusInstance, 
+        BigDecimal amount,
+        PublicKey sourcePubKey,
+        PublicKey destinationPubKey,
+        PublicKey leaderPubKey) {
+
         if (amount.compareTo(BigDecimal.ZERO) <= 0)
             return new ArrayList<>();
 
         String srcHash;
         String destHash;
         try {
-            srcHash = RSAEncryption.digest(request.getSourcePubKey().toString());
-            destHash = RSAEncryption.digest(request.getDestinationPubKey().toString());
+            srcHash = RSAEncryption.digest(sourcePubKey.toString());
+            destHash = RSAEncryption.digest(destinationPubKey.toString());
         } catch (NoSuchAlgorithmException e) {
             return new ArrayList<>();
         }
 
         Account srcAccount = temporaryAccounts.get(srcHash);
-        Account destAccount = temporaryAccounts.get(destHash);
-        if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(amount)) {
+        Account destAccount = temporaryAccounts.get(destHash);            
+        // include in the subtract the leader fee
+        if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(amount.add(BigDecimal.ONE))) {
             return new ArrayList<>();
         }
 

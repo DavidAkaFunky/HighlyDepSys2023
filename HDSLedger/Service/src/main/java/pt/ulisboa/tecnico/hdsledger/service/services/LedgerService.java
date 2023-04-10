@@ -30,17 +30,20 @@ public class LedgerService implements UDPService {
     private final NodeService service;
     // Map of unconfirmed transactions
     private final Mempool mempool;
+    // Leader configuration
+    private final ProcessConfig leaderConfig;
 
     // Thread to run service
     private Thread thread;
 
     public LedgerService(ProcessConfig[] clientConfigs, PerfectLink link, ProcessConfig config,
-            NodeService service, Mempool mempool) {
+            NodeService service, Mempool mempool, ProcessConfig leaderConfig) {
         this.clientConfigs = clientConfigs;
         this.link = link;
         this.config = config;
         this.service = service;
         this.mempool = mempool;
+        this.leaderConfig = leaderConfig;
     }
 
     public Thread getThread() {
@@ -73,20 +76,41 @@ public class LedgerService implements UDPService {
         return false;
     }
 
-    private void setTimer() {
+    private void setTimer(LedgerRequest request) {
         // Only non-leader nodes set the timer since leader will be the one
         // creating blocks with received transactions
         if (!this.config.isLeader())
             return;
 
-        // Should be a map <transactionId -> timer>
+        int initialConsensusInstance = this.service.getConsensusInstance();
+        NodeService nodeService = this.service;
+        String leaderId = this.leaderConfig.getId();
+
         Timer timer = new Timer();
         timer.schedule(new TimerTask() {
+            // Node service to check actual consensus instance (when timer runs)
+            NodeService service = nodeService;
+            // Consensus instance when timer was set
+            int consensusInstance = initialConsensusInstance;
+            // Logger
+            CustomLogger LOGGER = LedgerService.LOGGER;
+
             @Override
             public void run() {
-                System.out.println("Timer ran out!");
+                // If consensus instance is the same as when timer was set
+                if (consensusInstance == service.getConsensusInstance())
+                    return;
+
+                LOGGER.log(Level.INFO, MessageFormat.format(
+                        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "@           WARNING: CLIENT REQUEST IGNORED!         @\n"
+                                + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                        leaderId));
             }
         }, 2 * 60 * 1000);
+
+        this.mempool.getTimers().put(request, timer);
     }
 
     public void createAccount(LedgerRequest request) {
@@ -103,7 +127,8 @@ public class LedgerService implements UDPService {
             mempool.accept(queue -> {
                 queue.add(request);
             });
-        setTimer();
+
+        setTimer(request);
     }
 
     public void transfer(LedgerRequest request) {
@@ -122,7 +147,7 @@ public class LedgerService implements UDPService {
                 queue.add(request);
             });
 
-        setTimer();
+        setTimer(request);
     }
 
     public void balance(LedgerRequest request) {
@@ -147,7 +172,8 @@ public class LedgerService implements UDPService {
     }
 
     private void startConsensusIfBlock(Optional<Block> block) {
-        if (block.isEmpty()) return;
+        if (block.isEmpty())
+            return;
         this.service.startConsensus(block.get());
     }
 
@@ -187,12 +213,12 @@ public class LedgerService implements UDPService {
                                     balance((LedgerRequest) message);
                                 }
                                 case ACK -> LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received ACK message from {1}",
-                                                    this.config.getId(), message.getSenderId()));
+                                        MessageFormat.format("{0} - Received ACK message from {1}",
+                                                this.config.getId(), message.getSenderId()));
 
                                 case IGNORE -> LOGGER.log(Level.INFO,
-                                            MessageFormat.format("{0} - Received IGNORE message from {1}",
-                                                    this.config.getId(), message.getSenderId()));
+                                        MessageFormat.format("{0} - Received IGNORE message from {1}",
+                                                this.config.getId(), message.getSenderId()));
 
                                 default -> throw new LedgerException(ErrorMessage.CannotParseMessage);
                             }

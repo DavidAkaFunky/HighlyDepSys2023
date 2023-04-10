@@ -3,9 +3,12 @@ package pt.ulisboa.tecnico.hdsledger.service.services;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 
+import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Timer;
 import java.util.function.Consumer;
 
 import com.google.gson.GsonBuilder;
@@ -13,6 +16,8 @@ import com.google.gson.GsonBuilder;
 public class Mempool {
 
     private final Queue<LedgerRequest> pool = new LinkedList<>();
+    // Timer for each request
+    private final Map<LedgerRequest, Timer> timers = new HashMap<>();
 
     private final int blocksize;
 
@@ -20,6 +25,16 @@ public class Mempool {
         this.blocksize = blocksize;
     }
 
+    public Map<LedgerRequest, Timer> getTimers() {
+        return timers;
+    }
+
+    public void removeRequest(LedgerRequest request) {
+        this.pool.remove(request);
+        Timer timer = this.timers.remove(request);
+        if (timer != null)
+            timer.cancel();
+    }
 
     /*
      * Check if mempool has enough transactions to create a block
@@ -30,12 +45,13 @@ public class Mempool {
      */
     private Optional<Block> checkTransactionThreshold() {
         synchronized (this.pool) {
-            if (this.pool.size() < this.blocksize) return Optional.empty();
+            if (this.pool.size() < this.blocksize)
+                return Optional.empty();
             var block = new Block();
 
-            for(int i = 0; i < this.blocksize; i++)
+            for (int i = 0; i < this.blocksize; i++)
                 block.addRequest(this.pool.poll());
-           return Optional.of(block);
+            return Optional.of(block);
         }
     }
 
