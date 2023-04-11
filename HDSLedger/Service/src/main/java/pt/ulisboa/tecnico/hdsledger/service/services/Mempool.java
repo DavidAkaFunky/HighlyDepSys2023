@@ -49,8 +49,11 @@ public class Mempool {
                 return Optional.empty();
             var block = new Block();
 
-            for (int i = 0; i < this.blocksize; i++)
-                block.addRequest(this.pool.poll());
+            for (int i = 0; i < this.blocksize; i++){
+                LedgerRequest req = this.pool.poll();
+                block.addRequest(req);
+                this.timers.remove(req);
+            }
             return Optional.of(block);
         }
     }

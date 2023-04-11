@@ -32,9 +32,6 @@ public class LedgerService implements UDPService {
     // Leader configuration
     private final ProcessConfig leaderConfig;
 
-    // Thread to run service
-    private Thread thread;
-
     public LedgerService(ProcessConfig[] clientConfigs, PerfectLink link, ProcessConfig config,
             NodeService service, Mempool mempool, ProcessConfig leaderConfig) {
         this.clientConfigs = clientConfigs;
@@ -45,14 +42,12 @@ public class LedgerService implements UDPService {
         this.leaderConfig = leaderConfig;
     }
 
-    public Thread getThread() {
-        return thread;
-    }
-
-    public void killThread() {
-        thread.interrupt();
-    }
-
+    /*
+     * Verifies if the client signature is valid by matching the sender id
+     * public key with the signature inside the request
+     * 
+     * @param request LedgerRequest to verify
+     */
     private boolean verifyClientSignature(LedgerRequest request) {
 
         // Find config of the sender
@@ -75,6 +70,13 @@ public class LedgerService implements UDPService {
         return false;
     }
 
+    /*
+     * To detect byzantine leader cherry picking transactions, a timer is set
+     * for each client request. The timer must be cancelled when the request is
+     * processed, otherwise it will trigger a warning message.
+     * 
+     * @param request LedgerRequest to set timer for
+     */
     private void setTimer(LedgerRequest request) {
         // Only non-leader nodes set the timer since leader will be the one
         // creating blocks with received transactions
@@ -108,7 +110,6 @@ public class LedgerService implements UDPService {
                         leaderId));
             }
         }, 2 * 60 * 1000);
-
         this.mempool.getTimers().put(request, timer);
     }
 
@@ -165,7 +166,14 @@ public class LedgerService implements UDPService {
                 this.service.read(request);
             }
             case CONSENSUS -> {
-                
+                if (this.config.isLeader())
+                    startConsensusIfBlock(mempool.add(request));
+                else
+                    mempool.accept(queue -> {
+                        queue.add(request);
+                    });
+
+                setTimer(request);
             }
         }
     }

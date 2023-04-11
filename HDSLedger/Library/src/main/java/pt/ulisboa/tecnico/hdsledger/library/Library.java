@@ -77,6 +77,8 @@ public class Library {
     /*
      * Creates a new account in the ledger
      * The request is not blocking and the response is received asynchronously
+     * The request will be sent to a small quorum of nodes that includes the leader
+     * and will wait for a small quorum of responses
      *
      * @param accountId Account identifier
      */
@@ -115,6 +117,8 @@ public class Library {
     /*
      * Transfer money from one account to another
      * The request is not blocking and the response is received asynchronously
+     * The request will be sent to a small quorum of nodes that includes the leader
+     * and will wait for a small quorum of responses
      *
      * @param sourceId Source account identifier
      *
@@ -168,6 +172,14 @@ public class Library {
     /*
      * Read account balance
      * The request is not blocking and the response is received asynchronously
+     * If the consistency mode is WEAK the request will be sent to a small quorum
+     * that
+     * includes the leader and will wait for a single response
+     * If the consistency mode is STRONG the request will be sent to every node and
+     * will wait for a small quroum of responses.
+     * The strong read may fail if not all nodes respond with the same value and
+     * in that case it fallbacks to a CONSENSUS read which is a requeset that
+     * will be inserted in a block and will be executed by the consensus protocol.
      *
      * @param accountId Account identifier
      *
@@ -191,6 +203,7 @@ public class Library {
 
         // Each LedgerRequest receives a specific ledger request which is serialized and
         // signed
+        consistencyMode = ConsistencyMode.CONSENSUS;
         LedgerRequestBalance requestRead = new LedgerRequestBalance(accountPubKey, consistencyMode,
                 this.knownConsensusInstance, currentNonce);
         String requestTransferSerialized = new Gson().toJson(requestRead);
@@ -208,11 +221,30 @@ public class Library {
         // Add to pending requests map
         this.requests.put(currentNonce, request);
 
-        if (consistencyMode.equals(ConsistencyMode.WEAK)){
+        if (consistencyMode.equals(ConsistencyMode.WEAK)) {
             this.link.smallQuorumMulticast(request);
         } else {
             this.link.quorumMulticast(request);
         }
+    }
+
+    /*
+     * Find id by public key
+     * 
+     * @param publicKey Public key
+     */
+    private String findIdByPublicKey(PublicKey publicKey) {
+        for (ProcessConfig config : this.allConfigs) {
+            try {
+                PublicKey accountPubKey = RSAEncryption.readPublicKey(config.getPublicKeyPath());
+                if (accountPubKey.equals(publicKey)) {
+                    return config.getId();
+                }
+            } catch (Exception e) {
+                throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+            }
+        }
+        return null;
     }
 
     /*
@@ -224,10 +256,16 @@ public class Library {
      * 
      * @param isSuccessful True if the request was successful
      */
-    private void logRequestResponse(LedgerRequest request, LedgerResponse response, boolean isSuccessful) {
+    private void logRequestResponse(LedgerRequest request, LedgerResponse response, boolean isSuccessful,
+            boolean isValid) {
         switch (request.getType()) {
             case CREATE -> {
-                if (isSuccessful) {
+                if (!isValid) {
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format(
+                                    "{0} - Invalid response to account creation request of {1}.",
+                                    config.getId(), request.getSenderId()));
+                } else if (isSuccessful) {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
                                     "{0} - Account {1} was created. Current balance is {2}",
@@ -242,29 +280,41 @@ public class Library {
             }
             case TRANSFER -> {
                 LedgerRequestTransfer requestTransfer = request.deserializeTransfer();
-                if (isSuccessful) {
+                if (!isValid) {
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format(
+                                    "{0} - Invalid response to transfer request to {1}.",
+                                    config.getId(), findIdByPublicKey(requestTransfer.getDestinationPubKey())));
+                } else if (isSuccessful) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
-                            "{0} - Transfer was successful. Current balance is {1}",
-                            config.getId(), response.getUpdateAccount().getUpdatedBalance()));
+                            "{0} - Transfer to {1} was successful. Current balance is {2}",
+                            config.getId(), findIdByPublicKey(requestTransfer.getDestinationPubKey()),
+                            response.getUpdateAccount().getUpdatedBalance()));
                 } else {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
-                                    "{0} - Transfer was unsuccessful.",
-                                    config.getId()));
+                                    "{0} - Transfer to {1} was unsuccessful.",
+                                    config.getId(), findIdByPublicKey(requestTransfer.getDestinationPubKey())));
                 }
             }
             case BALANCE -> {
+                LedgerRequestBalance requestBalance = request.deserializeBalance();
                 System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(response));
-                if (isSuccessful) {
+                if (!isValid) {
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format(
+                                    "{0} - Invalid response to balance request of {1}.",
+                                    config.getId(), findIdByPublicKey(requestBalance.getAccountPubKey())));
+                } else if (isSuccessful) {
                     LOGGER.log(Level.INFO, MessageFormat.format(
                             "{0} - Balance of {1} is {2}",
-                            config.getId(), request.getSenderId(),
+                            config.getId(), findIdByPublicKey(requestBalance.getAccountPubKey()),
                             response.getUpdateAccount().getUpdatedBalance()));
                 } else {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
                                     "{0} - Failed to read balance of {1}",
-                                    config.getId(), request.getSenderId()));
+                                    config.getId(), findIdByPublicKey(requestBalance.getAccountPubKey())));
                 }
             }
             default -> {
@@ -311,6 +361,122 @@ public class Library {
         return true;
     }
 
+    private void handleReadResponse(LedgerResponse response, Integer readNonce) {
+
+        // Get pending request associated with nonce
+        LedgerRequest request = this.requests.get(readNonce);
+        // If request is not present, it means that it was already processed
+        if (request == null)
+            return;
+
+        // Requests that have a readNonce must be a response to a balance request
+        if (request.getType() != Message.Type.BALANCE)
+            throw new LedgerException(ErrorMessage.InvalidResponse);
+
+        // Add response to corresponding nonce
+        this.responses.putIfAbsent(readNonce, new ArrayList<>());
+        List<LedgerResponse> ledgerResponses = this.responses.get(readNonce);
+        ledgerResponses.add(response);
+
+        // Get original request
+        LedgerRequestBalance requestBalance = request.deserializeBalance();
+        switch (requestBalance.getConsistencyMode()) {
+            case WEAK -> {
+                // Wait for a single valid response
+                boolean isValidLedgerResponse = this.verifyResponseSignatures(response);
+
+                this.logRequestResponse(request, response, response.isSuccessful(), isValidLedgerResponse);
+
+                if (!isValidLedgerResponse) {
+                    return;
+                }
+
+                this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
+                this.requests.remove(readNonce);
+                this.responses.remove(readNonce);
+            }
+            case STRONG -> {
+                // Wait for 2f+1 responses
+                if (ledgerResponses.size() < this.bigQuorumSize)
+                    break;
+
+                boolean areResponsesValid = ledgerResponses.stream()
+                        .map(LedgerResponse::getUpdateAccount).distinct().count() <= 1;
+
+                this.logRequestResponse(request, response, response.isSuccessful(), areResponsesValid);
+
+                if (!areResponsesValid) {
+                    // TODO: Should send CONSENSUS request
+                    return;
+                }
+
+                this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
+                this.requests.remove(readNonce);
+                this.responses.remove(readNonce);
+            }
+            case CONSENSUS -> {
+                boolean isValidLedgerResponse = this.verifyResponseSignatures(response);
+
+                this.logRequestResponse(request, response, response.isSuccessful(),
+                        isValidLedgerResponse);
+
+                if (!isValidLedgerResponse) {
+                    return;
+                }
+
+                this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
+                this.requests.remove(readNonce);
+                this.responses.remove(readNonce);
+            }
+        }
+    }
+
+    private void handleCreateOrTransferResponse(LedgerResponse response) {
+
+        // Get nonces of requests that were processed in the block
+        List<Integer> nonces = response.getUpdateAccount().getNonces();
+
+        // Each nonce represent a request sent by this client
+        for (int nonce : nonces) {
+
+            // Get pending request associated with nonce
+            LedgerRequest request = this.requests.get(nonce);
+            // If request is not present, it means that it was already processed
+            if (request == null)
+                return;
+
+            // Add response to corresponding nonce
+            this.responses.putIfAbsent(nonce, new ArrayList<>());
+            List<LedgerResponse> ledgerResponses = this.responses.get(nonce);
+            ledgerResponses.add(response);
+
+            switch (request.getType()) {
+                case CREATE, TRANSFER -> {
+                    // Wait for a single valid response
+                    boolean isValidLedgerResponse = this.verifyResponseSignatures(response);
+
+                    this.logRequestResponse(request, response, response.isSuccessful(),
+                            isValidLedgerResponse);
+
+                    if (!isValidLedgerResponse) {
+                        return;
+                    }
+
+                    this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
+                    this.requests.remove(nonce);
+                    this.responses.remove(nonce);
+                }
+                case BALANCE -> {
+                    //
+                }
+                default -> {
+                    throw new LedgerException(ErrorMessage.CannotParseMessage);
+                }
+            }
+
+        }
+    }
+
     public void listen() {
         try {
             // Thread to listen on every request
@@ -328,6 +494,9 @@ public class Library {
                                 continue;
                             }
                             case IGNORE -> {
+                                LOGGER.log(Level.INFO,
+                                        MessageFormat.format("{0} - Received IGNORE {1} message from {2}",
+                                                config.getId(), message.getMessageId(), message.getSenderId()));
                                 continue;
                             }
                             case REPLY -> {
@@ -340,120 +509,15 @@ public class Library {
                         }
 
                         LedgerResponse response = (LedgerResponse) message;
-                        System.out.println("REPLIES TO: " + response.getRepliesTo());
+
+                        // ReadNonce parameter is only set for balance requests
                         Integer readNonce = response.getNonce();
-                        if (readNonce != null) { // Means it's a response to a read request
-
-                            // Get pending request associated with nonce
-                            LedgerRequest request = this.requests.get(readNonce);
-                            // If request is not present, it means that it was already processed
-                            if (request == null)
-                                continue;
-
-                            if (request.getType() != Message.Type.BALANCE)
-                                throw new LedgerException(ErrorMessage.InvalidResponse);
-
-                            // Add response to corresponding nonce
-                            this.responses.putIfAbsent(readNonce, new ArrayList<>());
-                            List<LedgerResponse> ledgerResponses = this.responses.get(readNonce);
-                            ledgerResponses.add(response);
-
-                            LedgerRequestBalance requestBalance = new Gson().fromJson(request.getMessage(),
-                                    LedgerRequestBalance.class);
-
-                            switch (requestBalance.getConsistencyMode()) {
-                                case WEAK -> {
-                                    boolean isValidLedgerResponse = this.verifyResponseSignatures(response);
-
-                                    if (!isValidLedgerResponse)
-                                        throw new LedgerException(ErrorMessage.InvalidResponse);
-
-                                    this.logRequestResponse(request, response, response.isSuccessful());
-                                    this.knownConsensusInstance = response.getUpdateAccount()
-                                            .getConsensusInstance();
-
-                                    this.requests.remove(readNonce);
-                                    this.responses.remove(readNonce);
-                                }
-                                case STRONG -> {
-                                    if (ledgerResponses.size() < this.bigQuorumSize)
-                                        break;
-
-                                    boolean areResponsesValid = ledgerResponses.stream().map(LedgerResponse::getUpdateAccount).distinct().count() <= 1;
-
-                                    if (!areResponsesValid) {
-                                        // TODO
-                                        // request consensus for read
-                                    } 
-
-                                    this.logRequestResponse(request, response, response.isSuccessful());
-                                    this.knownConsensusInstance = response.getUpdateAccount()
-                                            .getConsensusInstance();
-
-                                    this.requests.remove(readNonce);
-                                    this.responses.remove(readNonce);
-                                }
-                                case CONSENSUS -> {
-                                    // TODO
-                                }
-                            }
-
+                        if (readNonce != null) {
+                            this.handleReadResponse(response, readNonce);
                             continue;
                         }
 
-                        /*
-                         * If the block that contains the response is valid, an update account with
-                         * the updated information about the client is returned with all the signatures
-                         * of the nodes that have processed the block and the nonces of all the client
-                         * requests that were processed in the block
-                         * 
-                         * If the block is not valid, the update account still contains the signatures
-                         * and nodes but the balance is set to zero
-                         */
-                        List<Integer> nonces = response.getUpdateAccount().getNonces();
-
-                        // Each nonce represent a request sent by this client
-                        for (int nonce : nonces) {
-
-                            // Get pending request associated with nonce
-                            LedgerRequest request = this.requests.get(nonce);
-                            // If request is not present, it means that it was already processed
-                            if (request == null)
-                                continue;
-
-                            // Add response to corresponding nonce
-                            this.responses.putIfAbsent(nonce, new ArrayList<>());
-                            List<LedgerResponse> ledgerResponses = this.responses.get(nonce);
-                            ledgerResponses.add(response);
-
-                            switch (request.getType()) {
-                                case CREATE, TRANSFER -> {
-                                    // Wait for f+1 responses
-                                    if (ledgerResponses.size() < this.smallQuorumSize)
-                                        break;
-
-                                    // At least one response will come from a correct node
-                                    // If multiple responses, all of them should be the same
-                                    LedgerResponse validLedgerResponse = ledgerResponses.stream()
-                                            .filter(this::verifyResponseSignatures)
-                                            .findFirst()
-                                            .orElseThrow(() -> new LedgerException(ErrorMessage.InvalidResponse));
-
-                                    // Clean to avoid unbounded memory usage
-                                    this.requests.remove(nonce);
-                                    this.responses.remove(nonce);
-
-                                    this.logRequestResponse(request, validLedgerResponse,
-                                            validLedgerResponse.isSuccessful());
-                                    this.knownConsensusInstance = validLedgerResponse.getUpdateAccount()
-                                            .getConsensusInstance();
-                                }
-                                default -> {
-                                    throw new LedgerException(ErrorMessage.CannotParseMessage);
-                                }
-                            }
-
-                        }
+                        this.handleCreateOrTransferResponse(response);
                     }
                 } catch (LedgerException e) {
                     e.printStackTrace();

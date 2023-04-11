@@ -1,6 +1,7 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
 import pt.ulisboa.tecnico.hdsledger.communication.*;
+import pt.ulisboa.tecnico.hdsledger.communication.Message.Type;
 import pt.ulisboa.tecnico.hdsledger.communication.builder.ConsensusMessageBuilder;
 import pt.ulisboa.tecnico.hdsledger.service.models.*;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -75,17 +76,17 @@ public class NodeService implements UDPService {
         this.nodesConfig = nodesConfig;
 
         this.mempool = mempool;
-        
+
         this.prepareMessages = new MessageBucket(nodesConfig.length);
         this.commitMessages = new MessageBucket(nodesConfig.length);
-        
+
         try {
             this.leaderPublicKey = RSAEncryption.readPublicKey(leaderConfig.getPublicKeyPath());
             this.leaderPublicKeyHash = RSAEncryption.digest(this.leaderPublicKey.toString());
         } catch (Exception e) {
             throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
         }
-        
+
         this.ledger = new Ledger(this.leaderConfig.getId(), this.leaderPublicKeyHash);
     }
 
@@ -211,6 +212,9 @@ public class NodeService implements UDPService {
                         nonces.putIfAbsent(this.leaderPublicKeyHash, new ArrayList<>());
                     }
                 }
+                case BALANCE -> {
+                    /* Ignore, used as a fallback for strong read */
+                }
                 default -> {
                     // Should never happen
                     LOGGER.log(Level.INFO, "Invalid request type");
@@ -228,12 +232,15 @@ public class NodeService implements UDPService {
                 this.ledger.revertTransfer(li.previous());
             return new HashMap<>();
         }
-        
+
         // Refresh stale update accounts
         for (Account account : this.ledger.getAccounts().values()) {
             UpdateAccount mostRecentUpdateAccount = account.getMostRecentUpdateAccount();
-            if (mostRecentUpdateAccount != null && instance - mostRecentUpdateAccount.getConsensusInstance() >= this.refreshThreshold) {
-                System.out.println("REFRESHING ACCOUNT WITH OWNER ID " + account.getOwnerId());
+            if (mostRecentUpdateAccount != null
+                    && instance - mostRecentUpdateAccount.getConsensusInstance() >= this.refreshThreshold) {
+                LOGGER.log(Level.INFO,
+                        MessageFormat.format("{0} - Refreshing signatures for account {1}",
+                                config.getId(), account.getOwnerId()));
                 nonces.putIfAbsent(account.getPublicKeyHash(), new ArrayList<>());
             }
         }
@@ -472,8 +479,8 @@ public class NodeService implements UDPService {
 
         LOGGER.log(Level.INFO,
                 MessageFormat.format(
-                        "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}, Block {4}",
-                        config.getId(), senderId, consensusInstance, round, block));
+                        "{0} - Received PRE-PREPARE message from {1} Consensus Instance {2}, Round {3}",
+                        config.getId(), senderId, consensusInstance, round));
 
         String errorLog = MessageFormat.format(
                 "  @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
@@ -736,7 +743,6 @@ public class NodeService implements UDPService {
             if (successfulAdd) {
                 // Apply temporary transactions to account and append block to blockchain
                 this.ledger.commitTransactions(consensusInstance);
-                System.out.println("------------------------------------------  ------------------------------------------");
             }
 
             // Reply to clients with the updated account and list of signatures
@@ -793,11 +799,59 @@ public class NodeService implements UDPService {
                         }
                     });
 
+            Block block = this.instanceInfo.get(consensusInstance).getPreparedBlock();
+
+            for (LedgerRequest request : block.getRequests()) {
+                if (request.getType() == Type.BALANCE) {
+                    List<Integer> repliesTo = new ArrayList<>();
+                    LedgerRequestBalance requestBalance = request.deserializeBalance();
+                    PublicKey publicKey = requestBalance.getAccountPubKey();
+                    String hashPubKey = hashPubKey(publicKey);
+                    UpdateAccount updateAccount = this.ledger.getAccountUpdate(consensusInstance, hashPubKey);
+                    if (updateAccount == null) {
+                        // TODO
+                        System.out.println("ACCOUNT DOESNT EXIST YET SOMEONE TRIED TO READ");
+                    }
+                    LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd,
+                            updateAccount,
+                            this.ledger.getAccountUpdateSignatures(
+                                    consensusInstance,
+                                    hashPubKey),
+                            requestBalance.getNonce());
+
+                    if (this.config.isLeader()) {
+                        var messageIds = this.instanceInfo.get(consensusInstance)
+                                .getPreparedBlock()
+                                .getRequests()
+                                .stream()
+                                .filter(r -> r.getSenderId().equals(updateAccount.getOwnerId()))
+                                .map(Message::getMessageId)
+                                .toList();
+                        response.setRepliesTo(messageIds);
+                    } else {
+
+                        mempool.accept(queue -> {
+                            for (var storedRequest : queue) {
+                                if (storedRequest.getMessage().equals(request.getMessage())) {
+                                    repliesTo.add(storedRequest.getMessageId());
+                                    mempool.removeRequest(storedRequest);
+                                    return;
+                                }
+                            }
+                        });
+                        response.setRepliesTo(repliesTo);
+                    }
+
+
+                    this.clientLink.send(request.getSenderId(), response);
+                }
+            }
+
             lastDecidedConsensusInstance.getAndIncrement();
 
             LOGGER.log(Level.INFO,
                     MessageFormat.format(
-                            "{0} - Decided on Consensus Instance {1}, Round {2}, Successful Add? {3} ------------------------------------------------------------------",
+                            "{0} - Decided on Consensus Instance {1}, Round {2}, Successful? {3}",
                             config.getId(), consensusInstance, round, successfulAdd));
         }
     }

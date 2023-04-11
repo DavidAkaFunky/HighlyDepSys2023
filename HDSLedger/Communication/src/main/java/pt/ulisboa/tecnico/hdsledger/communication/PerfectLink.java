@@ -308,7 +308,6 @@ public class PerfectLink {
             }
         }
 
-
         String senderId = message.getSenderId();
         int messageId = message.getMessageId();
 
@@ -330,8 +329,6 @@ public class PerfectLink {
         Type originalType = message.getType();
         // Message already received (add returns false if already exists) => Discard
         if (isRepeated) {
-            System.out.println("already received: " + message.getType() + " FROM " + message.getSenderId() + " WITH ID "
-                    + message.getMessageId());
             message.setType(Message.Type.IGNORE);
         }
 
