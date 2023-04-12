@@ -52,10 +52,12 @@ public class Ledger {
             String signature) {
         accountUpdateSignatures.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
         accountUpdateSignatures.get(consensusInstance).putIfAbsent(publicKeyHash, new ConcurrentHashMap<>());
-        accountUpdateSignatures.get(consensusInstance).get(publicKeyHash).put(signerId, signature);
+        this.getAccountUpdateSignatures(consensusInstance, publicKeyHash).put(signerId, signature);
     }
 
     public Map<String, String> getAccountUpdateSignatures(int consensusInstance, String publicKeyHash) {
+        accountUpdateSignatures.putIfAbsent(consensusInstance, new ConcurrentHashMap<>());
+        accountUpdateSignatures.get(consensusInstance).putIfAbsent(publicKeyHash, new ConcurrentHashMap<>());
         return accountUpdateSignatures.get(consensusInstance).get(publicKeyHash);
     }
 
@@ -162,6 +164,8 @@ public class Ledger {
     }
 
     public void commitTransactions(int consensusInstance) {
+        if (this.accountUpdates.get(consensusInstance) == null)
+            return;
         this.accountUpdates.get(consensusInstance).forEach((pubKeyHash, update) -> {
             this.accounts.putIfAbsent(pubKeyHash, new Account(update.getOwnerId(), pubKeyHash));
             Account acc = this.accounts.get(pubKeyHash);

@@ -20,14 +20,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 
-import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 
 public class NodeService implements UDPService {
 
     private static final CustomLogger LOGGER = new CustomLogger(NodeService.class.getName());
-    // Blockchain
-    private final Map<Integer, Block> blockchain = new ConcurrentHashMap<>();
-
     // Nodes configurations
     private final ProcessConfig[] nodesConfig;
     // Clients configurations
@@ -113,10 +110,7 @@ public class NodeService implements UDPService {
 
         // Get latest account update and corresponding signatures
         int localConsensusInstance = this.lastDecidedConsensusInstance.get();
-        UpdateAccount accountUpdate;
-        do {
-            accountUpdate = this.ledger.getAccountUpdate(localConsensusInstance, publicKeyHash);
-        } while ((accountUpdate == null || !accountUpdate.isValid()) && localConsensusInstance-- > 0);
+        UpdateAccount accountUpdate = this.ledger.getAccountUpdate(localConsensusInstance, publicKeyHash);
 
         Map<String, String> signatures = this.ledger.getAccountUpdateSignatures(accountUpdate.getConsensusInstance(),
                 publicKeyHash);
@@ -179,7 +173,7 @@ public class NodeService implements UDPService {
             ListIterator<LedgerRequestCreate> li = appliedCreations.listIterator(appliedCreations.size());
             while (li.hasPrevious())
                 this.ledger.revertCreateAccount(li.previous());
-            return new HashMap<>();
+            return this.createEmptyUpdateAccounts(instance, block);
         }
 
         // Process all transfer requests
@@ -230,7 +224,7 @@ public class NodeService implements UDPService {
             ListIterator<LedgerRequestTransfer> li = appliedTransfers.listIterator(appliedTransfers.size());
             while (li.hasPrevious())
                 this.ledger.revertTransfer(li.previous());
-            return new HashMap<>();
+            return this.createEmptyUpdateAccounts(instance, block);
         }
 
         // Refresh stale update accounts
@@ -261,7 +255,7 @@ public class NodeService implements UDPService {
                         MessageFormat.format("{0} - Error signing account update for consensus instance {1}",
                                 config.getId(), consensusInstance));
                 e.printStackTrace();
-                return new HashMap<>();
+                return this.createEmptyUpdateAccounts(instance, block);
             }
 
             accountUpdates.put(accountSignature, upAcc);
@@ -609,16 +603,18 @@ public class NodeService implements UDPService {
             // the client requests, this instance will not update the blockchain but the
             // updateAccounts
             // will be stored (as invalid)
+            boolean isValidBlock = true;
             if (accountUpdates.values().size() == 0) {
-                accountUpdates = this.createEmptyUpdateAccounts(consensusInstance, preparedBlock.get());
+                accountUpdates = new HashMap<>();
+            } else if (!accountUpdates.values().stream().toList().get(0).isValid()) {
+                isValidBlock = false;
             }
 
             // Reply to every prepare message received with the signatures of the updated
             // account
             // This serves as proof that the update is valid (if a quorum of signatures is
             // obtained)
-            CommitMessage c = new CommitMessage(accountUpdates.values().stream().toList().get(0).isValid(),
-                    accountUpdates);
+            CommitMessage c = new CommitMessage(isValidBlock, accountUpdates);
             instance.setCommitMessage(c);
 
             sendersMessage.forEach(senderMessage -> {
@@ -640,9 +636,6 @@ public class NodeService implements UDPService {
      */
     private boolean verifyAccountSignatures(String senderId, int consensusInstance, CommitMessage message) {
         Map<String, UpdateAccount> accountSignatures = message.getUpdateAccountSignatures();
-
-        if (accountSignatures.size() == 0)
-            return false;
 
         // Get sender public key from config
         Optional<ProcessConfig> senderConfig = Arrays.stream(this.nodesConfig)
@@ -729,6 +722,8 @@ public class NodeService implements UDPService {
             CommitMessage quorumCommitMessage = commitQuorum.get().stream().toList().get(0).deserializeCommitMessage();
             Map<String, UpdateAccount> accountUpdates = quorumCommitMessage.getUpdateAccountSignatures();
 
+            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(accountUpdates));
+
             // Verify if update accounts are valid or not
             boolean successfulAdd = quorumCommitMessage.isValidBlock();
 
@@ -745,106 +740,109 @@ public class NodeService implements UDPService {
                 this.ledger.commitTransactions(consensusInstance);
             }
 
-            // Reply to clients with the updated account and list of signatures
-            accountUpdates.values().stream()
-                    .filter(updateAccount -> updateAccount.getNonces().size() > 0) // Safety check
-                    .forEach((updateAccount) -> {
-                        try {
-                            LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd,
-                                    updateAccount,
-                                    this.ledger.getAccountUpdateSignatures(
-                                            consensusInstance,
-                                            updateAccount.getHashPubKey()));
+            /*
+             * What we have
+             * {HashPubKey -> UpdateAccount}
+             * LedgerRequests[]
+             * 
+             * What we want
+             * Create a LedgerResponse with UpdateAccount and nonces that lead to that
+             * and a LedgerResponse for each
+             * 
+             * For create and transfer we respond in bulk
+             * For balance we respond individually
+             */
 
-                            if (this.config.isLeader()) {
-                                // Requests in the block belong to the leader mempool
-                                // so reply to client using those ids
-                                var messageIds = this.instanceInfo.get(consensusInstance)
-                                        .getPreparedBlock()
-                                        .getRequests()
-                                        .stream()
-                                        .filter(r -> r.getSenderId().equals(updateAccount.getOwnerId()))
-                                        .map(Message::getMessageId)
-                                        .toList();
-                                response.setRepliesTo(messageIds);
+            Map<String, LedgerResponse> responses = new HashMap<>();
 
-                            } else {
-                                List<Integer> repliesTo = new ArrayList<>();
-                                // Remove requests from the mempool that are included in the block
-                                // Store the ids of those requests to then reply to the client
-                                this.instanceInfo.get(consensusInstance).getPreparedBlock().getRequests().stream()
-                                        .filter(r -> r.getSenderId().equals(updateAccount.getOwnerId()))
-                                        .forEach(request -> {
-                                            mempool.accept(queue -> {
-                                                for (var storedRequest : queue) {
-                                                    if (storedRequest.getMessage().equals(request.getMessage())) {
-                                                        repliesTo.add(storedRequest.getMessageId());
-                                                        mempool.removeRequest(storedRequest);
-                                                        return;
-                                                    }
-                                                }
-                                            });
-                                        });
-                                response.setRepliesTo(repliesTo);
+            this.instanceInfo.get(consensusInstance).getPreparedBlock().getRequests()
+                    .forEach(request -> {
+
+                        System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(request));
+
+                        switch (request.getType()) {
+                            case CREATE, TRANSFER -> {
+                                String accountHashPublicKey;
+                                if (request.getType().equals(Type.CREATE))
+                                    accountHashPublicKey = hashPubKey(request.deserializeCreate().getAccountPubKey());
+                                else
+                                    accountHashPublicKey = hashPubKey(request.deserializeTransfer().getSourcePubKey());
+
+                                LedgerResponse response = responses.get(request.getSenderId());
+                                if (response == null) {
+                                    UpdateAccount updateAccount = this.ledger.getAccount(accountHashPublicKey)
+                                            .getMostRecentUpdateAccount();
+
+                                    response = new LedgerResponse(this.config.getId(), successfulAdd,
+                                            updateAccount,
+                                            this.ledger.getAccountUpdateSignatures(
+                                                    updateAccount.getConsensusInstance(),
+                                                    accountHashPublicKey));
+
+                                    responses.put(request.getSenderId(), response);
+                                }
+
+                                if (this.config.isLeader())
+                                    responses.get(request.getSenderId()).addReplyTo(request.getMessageId());
+                                else {
+                                    mempool.accept(queue -> {
+                                        for (var storedRequest : queue) {
+                                            if (storedRequest.getMessage().equals(request.getMessage())) {
+                                                responses.get(request.getSenderId())
+                                                        .addReplyTo(storedRequest.getMessageId());
+                                                mempool.removeRequest(storedRequest);
+                                                return;
+                                            }
+                                        }
+                                    });
+                                }
                             }
+                            case BALANCE -> {
+                                LedgerRequestBalance balance = request.deserializeBalance();
+                                String accountHashPublicKey = hashPubKey(balance.getAccountPubKey());
 
-                            this.clientLink.send(updateAccount.getOwnerId(), response);
+                                Account acc = this.ledger.getAccount(accountHashPublicKey);
+                                // TODO
+                                if (acc == null)
+                                    System.out.println("ACCOUNT DOESNT EXIST YET SOMEONE TRIED TO READ");
 
-                        } catch (Exception e) {
-                            LOGGER.log(Level.INFO,
-                                    MessageFormat.format(
-                                            "{0} - Error signing account update for consensus instance {1}",
-                                            config.getId(), consensusInstance));
-                            e.printStackTrace();
+                                UpdateAccount updateAccount = acc.getMostRecentUpdateAccount();
+
+                                LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd,
+                                        updateAccount,
+                                        this.ledger.getAccountUpdateSignatures(
+                                                updateAccount.getConsensusInstance(),
+                                                accountHashPublicKey),
+                                        balance.getNonce());
+
+                                if (this.config.isLeader()) {
+                                    response.addReplyTo(request.getMessageId());
+                                } else {
+                                    mempool.accept(queue -> {
+                                        for (var storedRequest : queue) {
+                                            if (storedRequest.getMessage().equals(request.getMessage())) {
+                                                response.addReplyTo(storedRequest.getMessageId());
+                                                mempool.removeRequest(storedRequest);
+                                                return;
+                                            }
+                                        }
+                                    });
+                                }
+
+                                System.out.println("REPLYING TO:");
+                                System.out.println(response.getRepliesTo());
+                                this.clientLink.send(request.getSenderId(), response);
+                            }
+                            default -> {
+                                // Should not happen
+                                System.out.println("UNKNOWN REQUEST TYPE");
+                            }
                         }
                     });
 
-            Block block = this.instanceInfo.get(consensusInstance).getPreparedBlock();
-
-            for (LedgerRequest request : block.getRequests()) {
-                if (request.getType() == Type.BALANCE) {
-                    List<Integer> repliesTo = new ArrayList<>();
-                    LedgerRequestBalance requestBalance = request.deserializeBalance();
-                    PublicKey publicKey = requestBalance.getAccountPubKey();
-                    String hashPubKey = hashPubKey(publicKey);
-                    UpdateAccount updateAccount = this.ledger.getAccountUpdate(consensusInstance, hashPubKey);
-                    if (updateAccount == null) {
-                        // TODO
-                        System.out.println("ACCOUNT DOESNT EXIST YET SOMEONE TRIED TO READ");
-                    }
-                    LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd,
-                            updateAccount,
-                            this.ledger.getAccountUpdateSignatures(
-                                    consensusInstance,
-                                    hashPubKey),
-                            requestBalance.getNonce());
-
-                    if (this.config.isLeader()) {
-                        var messageIds = this.instanceInfo.get(consensusInstance)
-                                .getPreparedBlock()
-                                .getRequests()
-                                .stream()
-                                .filter(r -> r.getSenderId().equals(updateAccount.getOwnerId()))
-                                .map(Message::getMessageId)
-                                .toList();
-                        response.setRepliesTo(messageIds);
-                    } else {
-
-                        mempool.accept(queue -> {
-                            for (var storedRequest : queue) {
-                                if (storedRequest.getMessage().equals(request.getMessage())) {
-                                    repliesTo.add(storedRequest.getMessageId());
-                                    mempool.removeRequest(storedRequest);
-                                    return;
-                                }
-                            }
-                        });
-                        response.setRepliesTo(repliesTo);
-                    }
-
-
-                    this.clientLink.send(request.getSenderId(), response);
-                }
+            for (var entry : responses.entrySet()) {
+                System.out.println("REPLYING TO: " + entry.getValue().getRepliesTo());
+                this.clientLink.send(entry.getKey(), entry.getValue());
             }
 
             lastDecidedConsensusInstance.getAndIncrement();

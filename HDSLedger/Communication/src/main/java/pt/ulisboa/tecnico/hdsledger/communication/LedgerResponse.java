@@ -57,6 +57,10 @@ public class LedgerResponse extends Message {
         this.repliesTo = repliesTo;
     }
 
+    public void addReplyTo(int replyTo) {
+        this.repliesTo.add(replyTo);
+    }
+
     public Integer getNonce() {
         return nonce;
     }

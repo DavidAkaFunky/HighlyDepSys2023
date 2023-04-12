@@ -7,7 +7,6 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfigBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequest;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PerfectLink;
-import pt.ulisboa.tecnico.hdsledger.service.models.Ledger;
 import pt.ulisboa.tecnico.hdsledger.service.services.LedgerService;
 import pt.ulisboa.tecnico.hdsledger.service.services.NodeService;
 

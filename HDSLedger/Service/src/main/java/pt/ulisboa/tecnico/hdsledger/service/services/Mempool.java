@@ -52,7 +52,9 @@ public class Mempool {
             for (int i = 0; i < this.blocksize; i++){
                 LedgerRequest req = this.pool.poll();
                 block.addRequest(req);
-                this.timers.remove(req);
+                Timer timer = this.timers.remove(req);
+                if (timer != null)
+                    timer.cancel();
             }
             return Optional.of(block);
         }
