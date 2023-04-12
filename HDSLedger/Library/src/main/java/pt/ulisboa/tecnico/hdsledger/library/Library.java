@@ -43,6 +43,8 @@ public class Library {
     private final int bigQuorumSize;
     // Known consensus instance (for read-your-writes)
     private int knownConsensusInstance = 0;
+    // Timer for strong consisten reads to trigger consensus read
+    private final Map<Integer, Timer> timers = new ConcurrentHashMap<>();
 
     public Library(ProcessConfig clientConfig, ProcessConfig[] nodeConfigs, ProcessConfig[] clientConfigs) {
         this(clientConfig, nodeConfigs, clientConfigs, true);
@@ -169,6 +171,21 @@ public class Library {
         this.link.smallQuorumMulticast(request);
     }
 
+    public void balance(String accountId, ConsistencyMode consistencyMode) {
+        // Get account public key
+        Optional<ProcessConfig> accountConfig = Arrays.stream(this.allConfigs)
+                .filter(c -> c.getId().equals(accountId)).findFirst();
+        if (accountConfig.isEmpty())
+            throw new LedgerException(ErrorMessage.InvalidAccount);
+        PublicKey accountPubKey;
+        try {
+            accountPubKey = RSAEncryption.readPublicKey(accountConfig.get().getPublicKeyPath());
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+        }
+        balance(accountPubKey, consistencyMode);
+    }
+
     /*
      * Read account balance
      * The request is not blocking and the response is received asynchronously
@@ -185,25 +202,12 @@ public class Library {
      *
      * @param consistencyMode Consistency mode
      */
-    public void balance(String accountId, ConsistencyMode consistencyMode) {
+    public void balance(PublicKey accountPubKey, ConsistencyMode consistencyMode) {
 
         int currentNonce = this.nonce.getAndIncrement();
 
-        // Get account public key
-        Optional<ProcessConfig> accountConfig = Arrays.stream(this.allConfigs)
-                .filter(c -> c.getId().equals(accountId)).findFirst();
-        if (accountConfig.isEmpty())
-            throw new LedgerException(ErrorMessage.InvalidAccount);
-        PublicKey accountPubKey;
-        try {
-            accountPubKey = RSAEncryption.readPublicKey(accountConfig.get().getPublicKeyPath());
-        } catch (Exception e) {
-            throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
-        }
-
         // Each LedgerRequest receives a specific ledger request which is serialized and
         // signed
-        consistencyMode = ConsistencyMode.CONSENSUS;
         LedgerRequestBalance requestRead = new LedgerRequestBalance(accountPubKey, consistencyMode,
                 this.knownConsensusInstance, currentNonce);
         String requestTransferSerialized = new Gson().toJson(requestRead);
@@ -221,10 +225,42 @@ public class Library {
         // Add to pending requests map
         this.requests.put(currentNonce, request);
 
-        if (consistencyMode.equals(ConsistencyMode.WEAK)) {
-            this.link.smallQuorumMulticast(request);
-        } else {
-            this.link.quorumMulticast(request);
+        switch (consistencyMode) {
+            case WEAK -> {
+                this.link.smallQuorumMulticast(request);
+            }
+            case STRONG -> {
+                Timer timer = new Timer();
+                this.link.quorumMulticast(request);
+
+                /*
+                 * When strong read fails or is delayed trigger a consensus read
+                 */
+                Map<Integer, LedgerRequest> localRequests = this.requests;
+                Map<Integer, List<LedgerResponse>> localResponses = this.responses;
+                Map<Integer, Timer> localTimers = this.timers;
+                timer.schedule(new TimerTask() {
+                    Map<Integer, LedgerRequest> requests = localRequests;
+                    Map<Integer, List<LedgerResponse>> responses = localResponses;
+                    int nonce = currentNonce;
+                    PublicKey pubKey = accountPubKey;
+                    Map<Integer, Timer> timers = localTimers;
+
+                    @Override
+                    public void run() {
+                        timers.remove(nonce);
+                        requests.remove(nonce);
+                        responses.remove(nonce);
+
+                        balance(pubKey, ConsistencyMode.CONSENSUS);
+                    }
+                }, 2000);
+
+                timers.put(currentNonce, timer);
+            }
+            case CONSENSUS -> {
+                this.link.smallQuorumMulticast(request);
+            }
         }
     }
 
@@ -268,13 +304,13 @@ public class Library {
                 } else if (isSuccessful) {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
-                                    "{0} - Account {1} was created. Current balance is {2}",
+                                    "{0} - Account {1} was created. Current balance is {2}.",
                                     config.getId(), request.getSenderId(),
                                     response.getUpdateAccount().getUpdatedBalance()));
                 } else {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
-                                    "{0} - Failed to create account {1}",
+                                    "{0} - Failed to create account {1}.",
                                     config.getId(), request.getSenderId()));
                 }
             }
@@ -286,10 +322,11 @@ public class Library {
                                     "{0} - Invalid response to transfer request to {1}.",
                                     config.getId(), findIdByPublicKey(requestTransfer.getDestinationPubKey())));
                 } else if (isSuccessful) {
-                    LOGGER.log(Level.INFO, MessageFormat.format(
-                            "{0} - Transfer to {1} was successful. Current balance is {2}",
-                            config.getId(), findIdByPublicKey(requestTransfer.getDestinationPubKey()),
-                            response.getUpdateAccount().getUpdatedBalance()));
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format(
+                                "{0} - Transfer to {1} was successful. Current balance is {2}.",
+                                config.getId(), findIdByPublicKey(requestTransfer.getDestinationPubKey()),
+                                response.getUpdateAccount().getUpdatedBalance()));
                 } else {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
@@ -299,21 +336,21 @@ public class Library {
             }
             case BALANCE -> {
                 LedgerRequestBalance requestBalance = request.deserializeBalance();
-                System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(response));
                 if (!isValid) {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
                                     "{0} - Invalid response to balance request of {1}.",
                                     config.getId(), findIdByPublicKey(requestBalance.getAccountPubKey())));
                 } else if (isSuccessful) {
-                    LOGGER.log(Level.INFO, MessageFormat.format(
-                            "{0} - Balance of {1} is {2}",
-                            config.getId(), findIdByPublicKey(requestBalance.getAccountPubKey()),
-                            response.getUpdateAccount().getUpdatedBalance()));
+                    LOGGER.log(Level.INFO, 
+                            MessageFormat.format(
+                                    "{0} - Balance of {1} is {2}.",
+                                    config.getId(), findIdByPublicKey(requestBalance.getAccountPubKey()),
+                                    response.getUpdateAccount().getUpdatedBalance()));
                 } else {
                     LOGGER.log(Level.INFO,
                             MessageFormat.format(
-                                    "{0} - Failed to read balance of {1}",
+                                    "{0} - Account {1} does not exist.",
                                     config.getId(), findIdByPublicKey(requestBalance.getAccountPubKey())));
                 }
             }
@@ -381,7 +418,7 @@ public class Library {
         // Get original request
         LedgerRequestBalance requestBalance = request.deserializeBalance();
         switch (requestBalance.getConsistencyMode()) {
-            case WEAK -> {
+            case WEAK, CONSENSUS -> {
                 // Wait for a single valid response
                 boolean isValidLedgerResponse = this.verifyResponseSignatures(response);
 
@@ -391,7 +428,6 @@ public class Library {
                     return;
                 }
 
-                this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
                 this.requests.remove(readNonce);
                 this.responses.remove(readNonce);
             }
@@ -403,32 +439,23 @@ public class Library {
                 boolean areResponsesValid = ledgerResponses.stream()
                         .map(LedgerResponse::getUpdateAccount).distinct().count() <= 1;
 
+                Timer timer = timers.get(readNonce);
+                if (timer != null) {
+                    timer.cancel();
+                    timers.remove(readNonce);
+                }
+
+                this.requests.remove(readNonce);
+                this.responses.remove(readNonce);
                 this.logRequestResponse(request, response, response.isSuccessful(), areResponsesValid);
 
                 if (!areResponsesValid) {
-                    // TODO: Should send CONSENSUS request
+                    balance(requestBalance.getAccountPubKey(), ConsistencyMode.CONSENSUS);
                     return;
                 }
-
-                this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
-                this.requests.remove(readNonce);
-                this.responses.remove(readNonce);
-            }
-            case CONSENSUS -> {
-                boolean isValidLedgerResponse = this.verifyResponseSignatures(response);
-
-                this.logRequestResponse(request, response, response.isSuccessful(),
-                        isValidLedgerResponse);
-
-                if (!isValidLedgerResponse) {
-                    return;
-                }
-
-                this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
-                this.requests.remove(readNonce);
-                this.responses.remove(readNonce);
             }
         }
+        this.knownConsensusInstance = response.getUpdateAccount().getConsensusInstance();
     }
 
     private void handleCreateOrTransferResponse(LedgerResponse response) {

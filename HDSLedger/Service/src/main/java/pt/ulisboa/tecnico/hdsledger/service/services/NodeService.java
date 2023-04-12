@@ -85,6 +85,7 @@ public class NodeService implements UDPService {
         }
 
         this.ledger = new Ledger(this.leaderConfig.getId(), this.leaderPublicKeyHash);
+
     }
 
     public ProcessConfig getConfig() {
@@ -97,9 +98,6 @@ public class NodeService implements UDPService {
 
     public void read(LedgerRequest request) {
         LedgerRequestBalance requestBalance = request.deserializeBalance();
-        // TODO: Best behavior if lastDecided is smaller than lastKnown
-        // int lastKnownConsensusInstance =
-        // requestBalance.getLastKnownConsensusInstance();
 
         String publicKeyHash;
         try {
@@ -109,14 +107,14 @@ public class NodeService implements UDPService {
         }
 
         // Get latest account update and corresponding signatures
-        int localConsensusInstance = this.lastDecidedConsensusInstance.get();
-        UpdateAccount accountUpdate = this.ledger.getAccountUpdate(localConsensusInstance, publicKeyHash);
+        Account account = this.ledger.getAccount(publicKeyHash);
+        UpdateAccount accountUpdate = account.getMostRecentAccountUpdate();
 
         Map<String, String> signatures = this.ledger.getAccountUpdateSignatures(accountUpdate.getConsensusInstance(),
                 publicKeyHash);
 
         // Replying with null if account doesn't exist, expected behavior ?
-        LedgerResponse response = new LedgerResponse(this.config.getId(), accountUpdate != null, accountUpdate,
+        LedgerResponse response = new LedgerResponse(this.config.getId(), accountUpdate.isValid(), accountUpdate,
                 signatures,
                 requestBalance.getNonce());
 
@@ -144,98 +142,126 @@ public class NodeService implements UDPService {
 
         boolean isValid = true;
 
-        List<LedgerRequest> requests = block.getRequests();
-
-        // Process first all create account requests
-        List<LedgerRequestCreate> appliedCreations = new ArrayList<>();
-        for (LedgerRequest request : requests) {
-            if (request.getType() == LedgerRequest.Type.CREATE) {
-                LedgerRequestCreate create = request.deserializeCreate();
-                Optional<Account> newAcc = this.ledger.createAccount(request.getSenderId(), create.getAccountPubKey(),
-                        this.leaderPublicKey);
-                if (newAcc.isEmpty()) {
-                    isValid = false;
-                    break;
-                } else {
-                    appliedCreations.add(create);
-                    List<Integer> nonceSet = new ArrayList<>();
-                    nonceSet.add(create.getNonce());
-                    nonces.put(newAcc.get().getPublicKeyHash(), nonceSet);
-
-                    // create update account for leader account
-                    nonces.putIfAbsent(this.leaderPublicKeyHash, new ArrayList<>());
+        if (instance == 1) {
+            Arrays.stream(this.clientsConfig).forEach(client -> {
+                PublicKey pubKey;
+                try {
+                    pubKey = RSAEncryption.readPublicKey(client.getPublicKeyPath());
+                } catch (Exception e) {
+                    throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
                 }
-            }
-        }
+                Optional<Account> account = this.ledger.createAccount(client.getId(), pubKey);
+                if (account.isEmpty()) {
+                    throw new LedgerException(ErrorMessage.InvalidAccount);
+                }
+                nonces.putIfAbsent(account.get().getPublicKeyHash(), new ArrayList<>());
+            });
+            /*
+             * Will create UpdateAccount with valid: False.
+             * This will create and UpdateAccount for accounts that do not exist yet
+             * when the client tries to read a non existing account he will get
+             * an invalid update account with the corresponding signatures
+             * and is able to confirm that that account does not exist
+             */
+            isValid = false;
+        } else {
 
-        // Check if any failed
-        if (!isValid) {
-            ListIterator<LedgerRequestCreate> li = appliedCreations.listIterator(appliedCreations.size());
-            while (li.hasPrevious())
-                this.ledger.revertCreateAccount(li.previous());
-            return this.createEmptyUpdateAccounts(instance, block);
-        }
+            List<LedgerRequest> requests = block.getRequests();
 
-        // Process all transfer requests
-        List<LedgerRequestTransfer> appliedTransfers = new ArrayList<>();
-        for (LedgerRequest request : requests) {
-            switch (request.getType()) {
-                case CREATE -> {
-                    /* Already processed */ }
-                case TRANSFER -> {
-                    LedgerRequestTransfer transfer = request.deserializeTransfer();
-                    List<Account> accounts = this.ledger.transfer(instance, transfer.getAmount(),
-                            transfer.getSourcePubKey(),
-                            transfer.getDestinationPubKey(),
+            // Process first all create account requests
+            List<LedgerRequestCreate> appliedCreations = new ArrayList<>();
+            for (LedgerRequest request : requests) {
+                if (request.getType() == LedgerRequest.Type.CREATE) {
+                    LedgerRequestCreate create = request.deserializeCreate();
+                    Optional<Account> newAcc = this.ledger.activateAccount(request.getSenderId(),
+                            create.getAccountPubKey(),
                             this.leaderPublicKey);
-                    if (accounts.size() == 0) {
+                    if (newAcc.isEmpty()) {
                         isValid = false;
                         break;
                     } else {
-                        appliedTransfers.add(transfer);
-
-                        // Create two UpdateAccounts (one with a nonce and the other empty)
-                        String srcAccount = accounts.get(0).getPublicKeyHash();
-                        nonces.putIfAbsent(srcAccount, new ArrayList<>());
-                        nonces.get(srcAccount).add(transfer.getNonce());
-
-                        String destAccount = accounts.get(1).getPublicKeyHash();
-                        nonces.putIfAbsent(destAccount, new ArrayList<>());
+                        appliedCreations.add(create);
+                        List<Integer> nonceSet = new ArrayList<>();
+                        nonceSet.add(create.getNonce());
+                        nonces.put(newAcc.get().getPublicKeyHash(), nonceSet);
 
                         // create update account for leader account
                         nonces.putIfAbsent(this.leaderPublicKeyHash, new ArrayList<>());
                     }
                 }
-                case BALANCE -> {
-                    /* Ignore, used as a fallback for strong read */
-                }
-                default -> {
-                    // Should never happen
-                    LOGGER.log(Level.INFO, "Invalid request type");
-                    isValid = false;
-                }
             }
-            if (!isValid)
-                break;
-        }
 
-        // Check if any failed
-        if (!isValid) {
-            ListIterator<LedgerRequestTransfer> li = appliedTransfers.listIterator(appliedTransfers.size());
-            while (li.hasPrevious())
-                this.ledger.revertTransfer(li.previous());
-            return this.createEmptyUpdateAccounts(instance, block);
-        }
+            // Check if any failed
+            if (!isValid) {
+                ListIterator<LedgerRequestCreate> li = appliedCreations.listIterator(appliedCreations.size());
+                while (li.hasPrevious())
+                    this.ledger.revertCreateAccount(li.previous());
+                return this.createEmptyUpdateAccounts(instance, block);
+            }
 
-        // Refresh stale update accounts
-        for (Account account : this.ledger.getAccounts().values()) {
-            UpdateAccount mostRecentUpdateAccount = account.getMostRecentUpdateAccount();
-            if (mostRecentUpdateAccount != null
-                    && instance - mostRecentUpdateAccount.getConsensusInstance() >= this.refreshThreshold) {
-                LOGGER.log(Level.INFO,
-                        MessageFormat.format("{0} - Refreshing signatures for account {1}",
-                                config.getId(), account.getOwnerId()));
-                nonces.putIfAbsent(account.getPublicKeyHash(), new ArrayList<>());
+            // Process all transfer requests
+            List<LedgerRequestTransfer> appliedTransfers = new ArrayList<>();
+            for (LedgerRequest request : requests) {
+                switch (request.getType()) {
+                    case CREATE -> {
+                        /* Already processed */ }
+                    case TRANSFER -> {
+                        LedgerRequestTransfer transfer = request.deserializeTransfer();
+                        List<Account> accounts = this.ledger.transfer(instance, transfer.getAmount(),
+                                transfer.getSourcePubKey(),
+                                transfer.getDestinationPubKey(),
+                                this.leaderPublicKey);
+                        if (accounts.size() == 0) {
+                            isValid = false;
+                            break;
+                        } else {
+                            appliedTransfers.add(transfer);
+
+                            // Create two UpdateAccounts (one with a nonce and the other empty)
+                            String srcAccount = accounts.get(0).getPublicKeyHash();
+                            nonces.putIfAbsent(srcAccount, new ArrayList<>());
+                            nonces.get(srcAccount).add(transfer.getNonce());
+
+                            String destAccount = accounts.get(1).getPublicKeyHash();
+                            nonces.putIfAbsent(destAccount, new ArrayList<>());
+
+                            // create update account for leader account
+                            nonces.putIfAbsent(this.leaderPublicKeyHash, new ArrayList<>());
+                        }
+                    }
+                    case BALANCE -> {
+                        /* Ignore, used as a fallback for strong read */
+                    }
+                    default -> {
+                        // Should never happen
+                        LOGGER.log(Level.INFO, "Invalid request type");
+                        isValid = false;
+                    }
+                }
+                if (!isValid)
+                    break;
+            }
+
+            // Check if any failed
+            if (!isValid) {
+                ListIterator<LedgerRequestTransfer> li = appliedTransfers.listIterator(appliedTransfers.size());
+                while (li.hasPrevious())
+                    this.ledger.revertTransfer(li.previous());
+                return this.createEmptyUpdateAccounts(instance, block);
+            }
+
+            // Refresh stale update accounts
+            for (Account account : this.ledger.getAccounts().values()) {
+                if (!account.isActive())
+                    continue;
+                UpdateAccount mostRecentUpdateAccount = account.getMostRecentAccountUpdate();
+                if (mostRecentUpdateAccount != null
+                        && instance - mostRecentUpdateAccount.getConsensusInstance() >= this.refreshThreshold) {
+                    LOGGER.log(Level.INFO,
+                            MessageFormat.format("{0} - Refreshing signatures for account {1}",
+                                    config.getId(), account.getOwnerId()));
+                    nonces.putIfAbsent(account.getPublicKeyHash(), new ArrayList<>());
+                }
             }
         }
 
@@ -247,7 +273,7 @@ public class NodeService implements UDPService {
             List<Integer> accountNonces = entry.getValue();
             String accountSignature;
             UpdateAccount upAcc = new UpdateAccount(account.getOwnerId(), account.getPublicKeyHash(),
-                    account.getBalance(), instance, accountNonces, true);
+                    account.getBalance(), instance, accountNonces, isValid);
             try {
                 accountSignature = RSAEncryption.sign(upAcc.toJson(), this.config.getPrivateKeyPath());
             } catch (Exception e) {
@@ -275,14 +301,10 @@ public class NodeService implements UDPService {
         return pubKeyHash;
     }
 
+    /*
+     * 
+     */
     private Map<String, UpdateAccount> createEmptyUpdateAccounts(int instance, Block block) {
-
-        // responder a todos os clientes que tem transacoes no bloco
-        // 1 update account por 1 cliente
-        // essa update account contem todos os nonces que estao no bloco referentes a
-        // esse cliente
-        // guardar os update account no ledger para no uponCommit serem accessiveis
-        // assinar os updates accounts normalmente
 
         // senderId -> pubKeyHash
         Map<String, String> senderToPubKeyHash = new HashMap<>();
@@ -606,7 +628,7 @@ public class NodeService implements UDPService {
             boolean isValidBlock = true;
             if (accountUpdates.values().size() == 0) {
                 accountUpdates = new HashMap<>();
-            } else if (!accountUpdates.values().stream().toList().get(0).isValid()) {
+            } else if (consensusInstance != 1 && !accountUpdates.values().stream().toList().get(0).isValid()) {
                 isValidBlock = false;
             }
 
@@ -715,6 +737,8 @@ public class NodeService implements UDPService {
 
         if (commitQuorum.isPresent() && instance.getCommittedRound() < round) {
 
+            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(this.ledger));
+
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
@@ -771,7 +795,7 @@ public class NodeService implements UDPService {
                                 LedgerResponse response = responses.get(request.getSenderId());
                                 if (response == null) {
                                     UpdateAccount updateAccount = this.ledger.getAccount(accountHashPublicKey)
-                                            .getMostRecentUpdateAccount();
+                                            .getMostRecentAccountUpdate();
 
                                     response = new LedgerResponse(this.config.getId(), successfulAdd,
                                             updateAccount,
@@ -803,15 +827,16 @@ public class NodeService implements UDPService {
 
                                 Account acc = this.ledger.getAccount(accountHashPublicKey);
                                 // TODO
-                                if (acc == null)
+                                if (!acc.isActive())
                                     System.out.println("ACCOUNT DOESNT EXIST YET SOMEONE TRIED TO READ");
 
-                                UpdateAccount updateAccount = acc.getMostRecentUpdateAccount();
+                                UpdateAccount accountUpdate = acc.getMostRecentAccountUpdate();
 
-                                LedgerResponse response = new LedgerResponse(this.config.getId(), successfulAdd,
-                                        updateAccount,
+                                LedgerResponse response = new LedgerResponse(this.config.getId(),
+                                        accountUpdate.isValid(),
+                                        accountUpdate,
                                         this.ledger.getAccountUpdateSignatures(
-                                                updateAccount.getConsensusInstance(),
+                                                accountUpdate.getConsensusInstance(),
                                                 accountHashPublicKey),
                                         balance.getNonce());
 
@@ -856,6 +881,10 @@ public class NodeService implements UDPService {
 
     @Override
     public void listen() {
+        // Create Genesis block (amen) to ensure all states are signed
+        Block genesisBlock = new Block();
+        genesisBlock.setConsensusInstance(0);
+        this.startConsensus(genesisBlock);
         try {
             // Thread to listen on every request
             // This is not thread safe but it's okay because

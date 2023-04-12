@@ -65,7 +65,22 @@ public class Ledger {
         return accountUpdateSignatures;
     }
 
-    public Optional<Account> createAccount(String ownerId, PublicKey publicKey, PublicKey leaderPublicKey) {
+    public Optional<Account> createAccount(String ownerId, PublicKey publicKey) {
+        String publicKeyHash;
+        try {
+            publicKeyHash = RSAEncryption.digest(publicKey.toString());
+        } catch (NoSuchAlgorithmException e) {
+            return Optional.empty();
+        }
+
+        // Put returns null if the key was not present
+        Account acc = new Account(ownerId, publicKeyHash);
+        this.temporaryAccounts.put(publicKeyHash, acc);
+
+        return Optional.of(acc);
+    }
+
+    public Optional<Account> activateAccount(String ownerId, PublicKey publicKey, PublicKey leaderPublicKey) {
         String publicKeyHash;
         String leaderPublicKeyHash;
         try {
@@ -76,16 +91,15 @@ public class Ledger {
         }
 
         // Put returns null if the key was not present
-        Account acc = new Account(ownerId, publicKeyHash);
-        if (temporaryAccounts.put(publicKeyHash, acc) != null) {
+        Account acc = this.temporaryAccounts.get(publicKeyHash);
+        if (!acc.isActive())
+            acc.activate();
+        else
             return Optional.empty();
-        }
         
         // Pay leader a fee
         acc.subtractBalance(this.fee);
-        
-        Account leaderAccount = temporaryAccounts.get(leaderPublicKeyHash);
-        leaderAccount.addBalance(this.fee);
+        temporaryAccounts.get(leaderPublicKeyHash).addBalance(this.fee);
         
         return Optional.of(acc);
     }
@@ -101,7 +115,7 @@ public class Ledger {
         }
 
         // Put returns null if the key was not present
-        temporaryAccounts.remove(publicKeyHash);
+        temporaryAccounts.get(publicKeyHash).deactivate();
     }
 
     public List<Account> transfer(
@@ -129,7 +143,7 @@ public class Ledger {
         Account destAccount = temporaryAccounts.get(destHash);
         Account leaderAccount = temporaryAccounts.get(leaderHash);            
         // include in the subtract the leader fee
-        if (srcAccount == null || destAccount == null || !srcAccount.subtractBalance(amount.add(this.fee))) {
+        if (!srcAccount.isActive() || !destAccount.isActive() || !srcAccount.subtractBalance(amount.add(this.fee))) {
             return new ArrayList<>();
         }
 

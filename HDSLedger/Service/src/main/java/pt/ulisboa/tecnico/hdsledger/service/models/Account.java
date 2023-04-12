@@ -6,6 +6,8 @@ import pt.ulisboa.tecnico.hdsledger.communication.UpdateAccount;
 
 public class Account {
 
+    // Is active
+    private boolean active = false;
     // Owner ID
     private String ownerId;
     // Account identifier
@@ -22,6 +24,18 @@ public class Account {
     public Account(String ownerId, String publicKeyHash) {
         this.ownerId = ownerId;
         this.publicKeyHash = publicKeyHash;
+    }
+
+    public void activate() {
+        this.active = true;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
+
+    public boolean isActive() {
+        return active;
     }
 
     public String getOwnerId() {
@@ -58,7 +72,7 @@ public class Account {
         this.balance = updateAccount.getUpdatedBalance();
     }
 
-    public UpdateAccount getMostRecentUpdateAccount() {
+    public UpdateAccount getMostRecentAccountUpdate() {
         return mostRecentUpdateAccount;
     }
 

@@ -14,7 +14,7 @@ public class LedgerResponse extends Message {
     private UpdateAccount updateAccount;
     // Signatures of the account update
     private Map<String, String> signatures;
-    // Replying to nonces (only for R new Optional.EAD operations)
+    // Replying to nonces (only for new READ operations)
     private Integer nonce = null;
     // Set of message ids this is replying to (for ACKs)
     private List<Integer> repliesTo = new ArrayList<>();
