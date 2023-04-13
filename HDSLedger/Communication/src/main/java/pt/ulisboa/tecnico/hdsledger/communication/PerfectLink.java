@@ -360,7 +360,7 @@ public class PerfectLink {
                 receivedAcks.addAll(castedMessage.getRepliesTo());
             }
             default -> {
-                System.out.println("que mensagem vai responder com um ack: " + message.getType());
+                System.out.println("WHAT: que mensagem vai responder com um ack: " + message.getType());
             }
         }
 

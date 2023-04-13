@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.google.gson.GsonBuilder;
+
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestCreate;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.UpdateAccount;
@@ -35,9 +37,12 @@ public class Ledger {
     private Account temporaryLeaderAccount;
 
     public Ledger(String leaderId, String leaderPublicKeyHash) {
-        this.temporaryLeaderAccount = new Account(leaderId, leaderPublicKeyHash);
-        this.temporaryAccounts.put(leaderPublicKeyHash, this.temporaryLeaderAccount);
-        this.accounts.put(leaderPublicKeyHash, new Account(leaderId, leaderPublicKeyHash));
+        /*
+         * this.temporaryLeaderAccount = new Account(leaderId, leaderPublicKeyHash);
+         * this.temporaryAccounts.put(leaderPublicKeyHash, this.temporaryLeaderAccount);
+         * this.accounts.put(leaderPublicKeyHash, new Account(leaderId,
+         * leaderPublicKeyHash));
+         */
     }
 
     public Map<String, Account> getAccounts() {
@@ -96,11 +101,11 @@ public class Ledger {
             acc.activate();
         else
             return Optional.empty();
-        
+
         // Pay leader a fee
         acc.subtractBalance(this.fee);
         temporaryAccounts.get(leaderPublicKeyHash).addBalance(this.fee);
-        
+
         return Optional.of(acc);
     }
 
@@ -119,11 +124,11 @@ public class Ledger {
     }
 
     public List<Account> transfer(
-        int consensusInstance, 
-        BigDecimal amount,
-        PublicKey sourcePubKey,
-        PublicKey destinationPubKey,
-        PublicKey leaderPubKey) {
+            int consensusInstance,
+            BigDecimal amount,
+            PublicKey sourcePubKey,
+            PublicKey destinationPubKey,
+            PublicKey leaderPubKey) {
 
         if (amount.compareTo(BigDecimal.ZERO) <= 0)
             return new ArrayList<>();
@@ -141,7 +146,7 @@ public class Ledger {
 
         Account srcAccount = temporaryAccounts.get(srcHash);
         Account destAccount = temporaryAccounts.get(destHash);
-        Account leaderAccount = temporaryAccounts.get(leaderHash);            
+        Account leaderAccount = temporaryAccounts.get(leaderHash);
         // include in the subtract the leader fee
         if (!srcAccount.isActive() || !destAccount.isActive() || !srcAccount.subtractBalance(amount.add(this.fee))) {
             return new ArrayList<>();
@@ -181,9 +186,12 @@ public class Ledger {
         if (this.accountUpdates.get(consensusInstance) == null)
             return;
         this.accountUpdates.get(consensusInstance).forEach((pubKeyHash, update) -> {
-            this.accounts.putIfAbsent(pubKeyHash, new Account(update.getOwnerId(), pubKeyHash));
-            Account acc = this.accounts.get(pubKeyHash);
-            acc.updateAccount(update, pubKeyHash);
+            if(update.isValid()){
+                this.accounts.putIfAbsent(pubKeyHash, new Account(update.getOwnerId(), pubKeyHash));
+                Account acc = this.accounts.get(pubKeyHash);
+                acc.activate();
+                acc.updateAccount(update, pubKeyHash);
+            }
         });
     }
 

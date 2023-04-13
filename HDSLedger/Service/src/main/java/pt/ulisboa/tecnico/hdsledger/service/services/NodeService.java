@@ -156,6 +156,15 @@ public class NodeService implements UDPService {
                 }
                 nonces.putIfAbsent(account.get().getPublicKeyHash(), new ArrayList<>());
             });
+            PublicKey pubKey;
+            try {
+                pubKey = RSAEncryption.readPublicKey(this.leaderConfig.getPublicKeyPath());
+            } catch (Exception e) {
+                throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+            }
+            Optional<Account> account = this.ledger.createAccount(this.leaderConfig.getId(), pubKey);
+            account.get().activate();
+            nonces.putIfAbsent(account.get().getPublicKeyHash(), new ArrayList<>());
             /*
              * Will create UpdateAccount with valid: False.
              * This will create and UpdateAccount for accounts that do not exist yet
@@ -273,7 +282,7 @@ public class NodeService implements UDPService {
             List<Integer> accountNonces = entry.getValue();
             String accountSignature;
             UpdateAccount upAcc = new UpdateAccount(account.getOwnerId(), account.getPublicKeyHash(),
-                    account.getBalance(), instance, accountNonces, isValid);
+                    account.getBalance(), instance, accountNonces, instance == 1 ? account.isActive() : isValid);
             try {
                 accountSignature = RSAEncryption.sign(upAcc.toJson(), this.config.getPrivateKeyPath());
             } catch (Exception e) {
@@ -621,10 +630,8 @@ public class NodeService implements UDPService {
             Map<String, UpdateAccount> accountUpdates = this.tryAddBlock(consensusInstance, preparedBlock.get());
 
             // If block is invalid, create "invalid" updateAccount with the requests nonce
-            // to reply to
-            // the client requests, this instance will not update the blockchain but the
-            // updateAccounts
-            // will be stored (as invalid)
+            // to reply to the client requests, this instance will not update the blockchain
+            // but the updateAccounts will be stored (as invalid)
             boolean isValidBlock = true;
             if (accountUpdates.values().size() == 0) {
                 accountUpdates = new HashMap<>();
@@ -737,16 +744,12 @@ public class NodeService implements UDPService {
 
         if (commitQuorum.isPresent() && instance.getCommittedRound() < round) {
 
-            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(this.ledger));
-
             instance = this.instanceInfo.get(consensusInstance);
             instance.setCommittedRound(round);
 
             // They are all the same, so we can just get the first one
             CommitMessage quorumCommitMessage = commitQuorum.get().stream().toList().get(0).deserializeCommitMessage();
             Map<String, UpdateAccount> accountUpdates = quorumCommitMessage.getUpdateAccountSignatures();
-
-            System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(accountUpdates));
 
             // Verify if update accounts are valid or not
             boolean successfulAdd = quorumCommitMessage.isValidBlock();
@@ -781,9 +784,6 @@ public class NodeService implements UDPService {
 
             this.instanceInfo.get(consensusInstance).getPreparedBlock().getRequests()
                     .forEach(request -> {
-
-                        System.out.println(new GsonBuilder().setPrettyPrinting().create().toJson(request));
-
                         switch (request.getType()) {
                             case CREATE, TRANSFER -> {
                                 String accountHashPublicKey;
@@ -826,9 +826,6 @@ public class NodeService implements UDPService {
                                 String accountHashPublicKey = hashPubKey(balance.getAccountPubKey());
 
                                 Account acc = this.ledger.getAccount(accountHashPublicKey);
-                                // TODO
-                                if (!acc.isActive())
-                                    System.out.println("ACCOUNT DOESNT EXIST YET SOMEONE TRIED TO READ");
 
                                 UpdateAccount accountUpdate = acc.getMostRecentAccountUpdate();
 
@@ -854,8 +851,6 @@ public class NodeService implements UDPService {
                                     });
                                 }
 
-                                System.out.println("REPLYING TO:");
-                                System.out.println(response.getRepliesTo());
                                 this.clientLink.send(request.getSenderId(), response);
                             }
                             default -> {
@@ -866,7 +861,6 @@ public class NodeService implements UDPService {
                     });
 
             for (var entry : responses.entrySet()) {
-                System.out.println("REPLYING TO: " + entry.getValue().getRepliesTo());
                 this.clientLink.send(entry.getKey(), entry.getValue());
             }
 
