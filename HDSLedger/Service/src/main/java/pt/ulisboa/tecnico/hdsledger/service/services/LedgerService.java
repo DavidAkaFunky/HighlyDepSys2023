@@ -80,28 +80,18 @@ public class LedgerService implements UDPService {
     private void setTimer(LedgerRequest request) {
         // Only non-leader nodes set the timer since leader will be the one
         // creating blocks with received transactions
-        if (!this.config.isLeader())
+        if (this.config.isLeader())
             return;
 
-        int initialConsensusInstance = this.service.getConsensusInstance();
-        NodeService nodeService = this.service;
         String leaderId = this.leaderConfig.getId();
 
         Timer timer = new Timer();
         timer.schedule(new TimerTask() {
-            // Node service to check actual consensus instance (when timer runs)
-            NodeService service = nodeService;
-            // Consensus instance when timer was set
-            int consensusInstance = initialConsensusInstance;
             // Logger
             CustomLogger LOGGER = LedgerService.LOGGER;
 
             @Override
             public void run() {
-                // If consensus instance is the same as when timer was set
-                if (consensusInstance == service.getConsensusInstance())
-                    return;
-
                 LOGGER.log(Level.INFO, MessageFormat.format(
                         "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
                                 + "@           WARNING: CLIENT REQUEST IGNORED!         @\n"
@@ -109,7 +99,7 @@ public class LedgerService implements UDPService {
                                 + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
                         leaderId));
             }
-        }, 2 * 60 * 1000);
+        }, 30 * 1000);
         this.mempool.getTimers().put(request, timer);
     }
 
