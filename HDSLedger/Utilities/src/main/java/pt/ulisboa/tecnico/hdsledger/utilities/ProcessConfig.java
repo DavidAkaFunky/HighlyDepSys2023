@@ -25,7 +25,9 @@ public class ProcessConfig {
         FAKE_LEADER("FAKE_LEADER"),
         FAKE_VALUE("FAKE_VALUE"),
         BAD_BROADCAST("BAD_BROADCAST"),
-        BAD_CONSENSUS("BAD_CONSENSUS");
+        BAD_CONSENSUS("BAD_CONSENSUS"),
+
+        GREEDY_CLIENT("GREEDY_CLIENT");
 
         String behavior;
 

@@ -8,6 +8,8 @@ import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
 import java.text.MessageFormat;
 import java.util.logging.Level;
 import java.util.Arrays;
@@ -130,6 +132,9 @@ public class LedgerService implements UDPService {
             // TODO: reply to client
         }
 
+        if (!checkAuthorIsOwner(request))
+            return;
+
         if (this.config.isLeader())
             startConsensusIfBlock(mempool.add(request));
         else
@@ -138,6 +143,38 @@ public class LedgerService implements UDPService {
             });
 
         setTimer(request);
+    }
+
+    private boolean checkAuthorIsOwner(LedgerRequest request) {
+        var transferRequest = request.deserializeTransfer();
+        var pubKey = transferRequest.getSourcePubKey();
+        boolean result = false;
+        Optional<ProcessConfig> senderConfig = Arrays.stream(this.clientConfigs).filter(config -> config.getId().equals(request.getSenderId())).findAny();
+        if (senderConfig.isEmpty()) {
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        +"@          WARNING: SENDER IS NOT PRESENT IN CONFIG! @\n"
+                        + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        + "IT IS POSSIBLE THAT CLIENT {0} IS DOING SOMETHING NASTY!",
+                request.getSenderId()));
+            return result;
+        }
+        try {
+            result = RSAEncryption.readPublicKey(senderConfig.get().getPublicKeyPath()).equals(pubKey);
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+        }
+
+        if (!result) {
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        +"@          WARNING: SENDER IS NOT SOURCE ACCOUNT!   @\n"
+                        + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                        + "IT IS POSSIBLE THAT CLIENT {0} IS DOING SOMETHING NASTY!",
+                request.getSenderId()));
+        }
+
+        return result;
     }
 
     public void balance(LedgerRequest request) {

@@ -5,7 +5,7 @@
         "port": 3010,
         "publicKeyPath": "../PKI/client10.pub",
         "privateKeyPath": "../PKI/client10.priv",
-        "byzantineBehavior": "NONE"
+        "byzantineBehavior": "GREEDY_CLIENT"
     },
     {
         "id": "11",

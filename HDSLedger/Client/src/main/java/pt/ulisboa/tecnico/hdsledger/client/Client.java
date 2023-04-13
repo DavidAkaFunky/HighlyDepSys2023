@@ -14,12 +14,13 @@ import java.util.Scanner;
 
 public class Client {
 
-    private final static String clientsConfigPath = "src/main/resources/client_config.json";
+    private static String clientsConfigPath = "src/main/resources/";
     private static String nodesConfigPath = "../Service/src/main/resources/";
 
-    private static void welcomeText(String clientId) {
+    private static void welcomeText(String clientId, ProcessConfig.ByzantineBehavior behavior) {
         System.out.println("Welcome to the HDS Ledger Client!");
         System.out.println("Your client ID is: " + clientId);
+        System.out.println("Your Byzantine Behavior is: " + behavior);
         System.out.println("Type 'create' to create an account.");
         System.out.println(
                 "Type 'transfer <destination_id> <amount>' to transfer a given amount from one account to another.");
@@ -32,9 +33,10 @@ public class Client {
         // Command line arguments
         final String clientId = args[0];
         nodesConfigPath += args[1];
+        clientsConfigPath += args[2];
         boolean showDebugLogs = false;
-        if (args.length == 3) {
-            showDebugLogs = args[2].equals("-debug");
+        if (args.length == 4) {
+            showDebugLogs = args[3].equals("-debug");
         }
 
         // Get all the configs
@@ -59,7 +61,7 @@ public class Client {
         library.listen();
 
         // Initial text
-        welcomeText(clientId);
+        welcomeText(clientId, config.getByzantineBehavior());
 
         final Scanner scanner = new Scanner(System.in);
 

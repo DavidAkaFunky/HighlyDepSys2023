@@ -151,6 +151,13 @@ public class Library {
             throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
         }
 
+        // BYZANTINE_TESTS
+        if (this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.GREEDY_CLIENT) {
+            PublicKey temp = sourcePubKey;
+            sourcePubKey = destinationPubKey;
+            destinationPubKey = temp;
+        }
+
         // Each LedgerRequest receives a specific ledger request which is serialized and
         // signed
         LedgerRequestTransfer requestTransfer = new LedgerRequestTransfer(currentNonce, sourcePubKey, destinationPubKey,

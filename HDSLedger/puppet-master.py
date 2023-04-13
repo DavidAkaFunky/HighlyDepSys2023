@@ -21,7 +21,14 @@ server_configs = [
     "bad_broadcast_config.json",
     "bad_consensus_config.json",
 ]
+
+client_configs = [
+   "client_config.json",
+   "greedy_client_config.json"
+]
+
 server_config = server_configs[0]
+client_config = client_configs[1]
 block_size = 3
 
 def quit_handler(*args):
@@ -32,7 +39,7 @@ def quit_handler(*args):
 os.system("mvn clean install")
 
 # Spawn blockchain nodes
-with open("Service/src/main/resources/" + server_config) as f:
+with open(f"Service/src/main/resources/{server_config}") as f:
     data = json.load(f)
     processes = list()
     for key in data:
@@ -43,7 +50,7 @@ with open("Service/src/main/resources/" + server_config) as f:
             sys.exit()
 
 # Spawn blockchain clients
-with open("Client/src/main/resources/client_config.json") as f:
+with open(f"Client/src/main/resources/{client_config}") as f:
     data = json.load(f)
     processes = list()
     for key in data:
@@ -51,7 +58,7 @@ with open("Client/src/main/resources/client_config.json") as f:
         if pid == 0:
             debug_str = "-debug" if debug else ""
             os.system(
-                f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {server_config} {debug_str}' ; sleep 500\"")
+                f"{terminal} sh -c \"cd Client; mvn exec:java -Dexec.args='{key['id']} {server_config} {client_config} {debug_str}' ; sleep 500\"")
             sys.exit()
 
 signal.signal(signal.SIGINT, quit_handler)
