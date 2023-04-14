@@ -125,7 +125,7 @@ public class LedgerService implements UDPService {
         if (!verifyClientSignature(request)) {
             // TODO: reply to client
         }
-        if (this.config.isLeader())
+        if (this.config.isLeader() && this.config.getByzantineBehavior() != ProcessConfig.ByzantineBehavior.SILENT_LEADER)
             startConsensusIfBlock(mempool.add(request));
         else
             mempool.accept(queue -> {
@@ -154,7 +154,7 @@ public class LedgerService implements UDPService {
         if (!checkAuthorIsOwner(request))
             return;
 
-        if (this.config.isLeader())
+        if (this.config.isLeader() && this.config.getByzantineBehavior() != ProcessConfig.ByzantineBehavior.SILENT_LEADER)
             startConsensusIfBlock(mempool.add(request));
         else
             mempool.accept(queue -> {

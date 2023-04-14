@@ -20,7 +20,8 @@ server_configs = [
     "fake_value_config.json",
     "bad_broadcast_config.json",
     "bad_consensus_config.json",
-    "dictator_leader.json",
+    "dictator_leader_config.json",
+    "silent_leader_config.json",
 ]
 
 client_configs = [
