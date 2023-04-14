@@ -6,6 +6,10 @@ transfer 12 1  ---> self receber do 12
 **WORKING**
 **PARA MOSTRAR AO BALTASAR: Isto recusa logo o pedido, logo tem de se fazer mais um para o consenso ocorrer**
 
+Implementação:
+O cli funciona normalmente, a library tem uma condição para verificar se o cliente é `GREEDY_CLIENT` e nesse caso,
+troca a source e destination dos transfer requests. Isto não passa pois a chave da source e de quem enviou o pedido são diffs
+(apenas isso e não precisa verificar assinaturas,... pois os canais já garantem autenticação).
 
 # Byzantine Nodes
 
@@ -43,7 +47,7 @@ transfer 12 1  ---> self receber do 12
 13. Force consensus read
   Expected: works
   **WORKING**  
-  **PARA MOSTRAR AO BALTASAR: criar 3 contas fazer duas transferencias e um read (da trigger ao consenso) **
+  **PARA MOSTRAR AO BALTASAR: criar 3 contas fazer duas transferencias e um read (da trigger ao consenso)**
 
 14. different blocks to different nodes
  Expected: either consensus doesnt progress or all decide the same
@@ -64,7 +68,7 @@ transfer 12 1  ---> self receber do 12
   **TESTING TO DO**
 
 10. Sending different messages to different nodes
-  Expected
+  **IMPLICITLY COVERED IN OTHER TESTS?**
 
 11. Sending messages with a value different from the one pre-prepared
   **ALREADY COVERED IN TESTS THAT MODIFY THE BLOCK**
