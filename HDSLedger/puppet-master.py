@@ -22,7 +22,8 @@ server_configs = [
     "bad_consensus_config.json",
     "dictator_leader_config.json",
     "silent_leader_config.json",
-    "landlord_leader_config.json"
+    "landlord_leader_config.json",
+    "handsy_leader_config.json"
 ]
 
 client_configs = [

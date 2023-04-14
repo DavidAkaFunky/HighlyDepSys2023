@@ -1,5 +1,6 @@
 package pt.ulisboa.tecnico.hdsledger.service.services;
 
+import com.google.gson.Gson;
 import pt.ulisboa.tecnico.hdsledger.communication.*;
 import pt.ulisboa.tecnico.hdsledger.service.models.Block;
 import pt.ulisboa.tecnico.hdsledger.utilities.CustomLogger;
@@ -8,6 +9,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.security.PublicKey;
 import java.text.MessageFormat;
 import java.util.*;
@@ -153,6 +155,21 @@ public class LedgerService implements UDPService {
 
         if (!checkAuthorIsOwner(request))
             return;
+
+        if (this.config.isLeader() && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.HANDSY_LEADER && new Random().nextBoolean()) {
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Altered Transfer request {1}", this.config.getId(), request.getSenderId()));
+            LedgerRequestTransfer transfer = request.deserializeTransfer();
+            transfer.setAmount(new BigDecimal(transfer.getAmount().intValue() * 2 + 1));
+            String requestTransferSerialized = new Gson().toJson(transfer);
+            // String signature;
+            // try {
+            //     signature = RSAEncryption.sign(requestTransferSerialized, config.getPrivateKeyPath());
+            // } catch (Exception e) {
+            //     throw new LedgerException(ErrorMessage.FailedToSignMessage);
+            // }
+            request.setMessage(requestTransferSerialized);
+            // request.setClientSignature(signature);
+        }
 
         if (this.config.isLeader() && this.config.getByzantineBehavior() != ProcessConfig.ByzantineBehavior.SILENT_LEADER)
             startConsensusIfBlock(mempool.add(request));

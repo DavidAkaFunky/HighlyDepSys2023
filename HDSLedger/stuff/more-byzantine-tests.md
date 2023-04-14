@@ -26,11 +26,23 @@ transfer 12 1  ---> self receber do 12
   Expected: outros recusam updateaccount e o consenso prossegueu com o valor
     correto
 
+**WORKING**
+**PARA MOSTRAR AO BALTASAR: Mostrar isto fazer consensos e descontar certo mas avisa que houve updateAccount diferente**
+
 5. Modificar requests que recebeu que mete no bloco
   Expected: arrebentar nas assinaturas
 
+**WORKING**
+**PARA MOSTRAR AO BALTASAR: Mostrar avisos das assinaturas não darem match + queixas da censura**
+
 6. Adicionar requests falsos que aumentam o seu balance
   Expected: arrebentam na assinatura
+
+12. Weak read devolver garbage (update account errado ou assinaturas erradas)
+  Expected: client falha a verificar
+
+13. Force consensus read
+  Expected: works
 
 ## Non-Leader
 
@@ -49,5 +61,3 @@ transfer 12 1  ---> self receber do 12
 11. Sending messages with a value different from the one pre-prepared
   Expected 
 
-12. Weak read devolver garbage (update account errado ou assinaturas erradas)
-  Expected: client falha a verificar

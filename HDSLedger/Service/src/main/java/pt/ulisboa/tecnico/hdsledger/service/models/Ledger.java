@@ -11,8 +11,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.google.gson.GsonBuilder;
-
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestCreate;
 import pt.ulisboa.tecnico.hdsledger.communication.LedgerRequestTransfer;
 import pt.ulisboa.tecnico.hdsledger.communication.UpdateAccount;
