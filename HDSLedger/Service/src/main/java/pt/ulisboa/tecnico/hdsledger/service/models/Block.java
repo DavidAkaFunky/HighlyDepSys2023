@@ -13,8 +13,6 @@ public class Block {
     private int consensusInstance;
     // List of (ordered) transactions
     private List<LedgerRequest> requests = new ArrayList<>();
-    // Hash of the previous block
-    // private String previousHash;
     
     public Block() { }
 

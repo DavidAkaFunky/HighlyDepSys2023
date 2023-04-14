@@ -7,7 +7,7 @@
         "clientPort": 4001,
         "publicKeyPath": "../PKI/node1.pub",
         "privateKeyPath": "../PKI/node1.priv",
-        "byzantineBehavior": "BAD_BROADCAST"
+        "byzantineBehavior": "CORRUPT_LEADER"
     },
     {
         "id": "2",

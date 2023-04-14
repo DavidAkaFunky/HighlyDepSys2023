@@ -23,7 +23,6 @@ public class ProcessConfig {
         PASSIVE("PASSIVE"),
         DROP("DROP"),
         FAKE_LEADER("FAKE_LEADER"),
-        FAKE_VALUE("FAKE_VALUE"),
         BAD_BROADCAST("BAD_BROADCAST"),
         BAD_CONSENSUS("BAD_CONSENSUS"),
 
@@ -31,7 +30,10 @@ public class ProcessConfig {
         SILENT_LEADER("SILENT_LEADER"),
         LANDLORD_LEADER("LANDLORD_LEADER"),
         HANDSY_LEADER("HANDSY_LEADER"),
-        DICTATOR_LEADER("DICTATOR_LEADER");
+        DICTATOR_LEADER("DICTATOR_LEADER"),
+        FAKE_WEAK("FAKE_WEAK"),
+        FORCE_CONSENSUS_READ("FORCE_CONSENSUS_READ"),
+        CORRUPT_LEADER("CORRUPT_LEADER");
 
         String behavior;
 

@@ -86,6 +86,25 @@ public class PerfectLink {
     }
 
     /*
+     * BYZANTINE_TESTS
+     * Alternating broadcast of two messages to all nodes in the network
+     * 
+     * @param Message data1 The first message to be broadcasted
+     * 
+     * @param Message data2 The second message to be broadcasted
+     */
+    public void alternatingBroadcast(Message data1, Message data2) {
+        Gson gson = new Gson();
+        AtomicInteger parity = new AtomicInteger(1);
+        nodes.forEach((destId, dest) -> {
+            if (parity.getAndIncrement() % 2 == 0)
+                send(destId, gson.fromJson(gson.toJson(data1), data1.getClass()));
+            else
+                send(destId, gson.fromJson(gson.toJson(data2), data2.getClass()));
+        });
+    }
+
+    /*
      * Multicast to f+1 nodes in the network
      *
      * @param data The message to be broadcasted
@@ -139,28 +158,6 @@ public class PerfectLink {
 
         keys.forEach(destId -> send(destId, gson.fromJson(gson.toJson(data), data.getClass())));
     }
-
-    /*
-     * BYZANTINE_TESTS
-     * Broadcast a different value for each node in the network
-     * Used to test resiliency to Byzantine behavior
-     *
-     * @param data The message to be broadcasted
-     */
-    // TODO: Fix me, cant have node message here because of circular dependency
-    /*
-     * public void badBroadcast(ConsensusMessage data) {
-     * Gson gson = new Gson();
-     * nodes.forEach((destId, dest) -> {
-     * ConsensusMessage badData = gson.fromJson(gson.toJson(data), data.getClass());
-     * List<String> args = badData.getArgs();
-     * args.set(args.size() - 1, "BYZANTINE_VALUE_" +
-     * UUID.randomUUID().toString().replace("_", ""));
-     * badData.setArgs(args);
-     * send(destId, badData);
-     * });
-     * }
-     */
 
     /*
      * Sends a message to a specific node with guarantee of delivery

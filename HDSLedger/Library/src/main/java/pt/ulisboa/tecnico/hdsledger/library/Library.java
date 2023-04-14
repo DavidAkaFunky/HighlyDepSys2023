@@ -83,8 +83,6 @@ public class Library {
      * The request is not blocking and the response is received asynchronously
      * The request will be sent to a small quorum of nodes that includes the leader
      * and will wait for a single response
-     *
-     * @param accountId Account identifier
      */
     public void create() {
 

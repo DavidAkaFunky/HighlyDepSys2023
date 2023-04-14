@@ -29,6 +29,15 @@ public class UpdateAccount {
         this.valid = isValid;
     }
 
+    public UpdateAccount(UpdateAccount updateAccount) {
+        this.ownerId = updateAccount.ownerId;
+        this.hashPubKey = updateAccount.hashPubKey;
+        this.balance = updateAccount.balance;
+        this.consensusInstance = updateAccount.consensusInstance;
+        this.nonces = updateAccount.nonces;
+        this.valid = updateAccount.valid;
+    }
+
     public List<Integer> getNonces() {
         return nonces;
     }
@@ -51,6 +60,14 @@ public class UpdateAccount {
 
     public Integer getConsensusInstance() {
         return consensusInstance;
+    }
+
+    public void setBalance(BigDecimal balance) {
+        this.balance = balance;
+    }
+
+    public BigDecimal getBalance() {
+        return balance;
     }
 
     public void setValid(boolean valid) {

@@ -7,7 +7,7 @@
         "clientPort": 4001,
         "publicKeyPath": "../PKI/node1.pub",
         "privateKeyPath": "../PKI/node1.priv",
-        "byzantineBehavior": "BAD_BROADCAST"
+        "byzantineBehavior": "FORCE_CONSENSUS_READ"
     },
     {
         "id": "2",
@@ -17,7 +17,7 @@
         "clientPort": 4002,
         "publicKeyPath": "../PKI/node2.pub",
         "privateKeyPath": "../PKI/node2.priv",
-        "byzantineBehavior": "NONE"
+        "byzantineBehavior": "FORCE_CONSENSUS_READ"
     },
     {
         "id": "3",
@@ -27,7 +27,7 @@
         "clientPort": 4003,
         "publicKeyPath": "../PKI/node3.pub",
         "privateKeyPath": "../PKI/node3.priv",
-        "byzantineBehavior": "NONE"
+        "byzantineBehavior": "FORCE_CONSENSUS_READ"
     },
     {
         "id": "4",
@@ -37,6 +37,6 @@
         "clientPort": 4004,
         "publicKeyPath": "../PKI/node4.pub",
         "privateKeyPath": "../PKI/node4.priv",
-        "byzantineBehavior": "NONE"
+        "byzantineBehavior": "FORCE_CONSENSUS_READ"
     }
 ]

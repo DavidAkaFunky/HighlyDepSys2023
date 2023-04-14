@@ -17,27 +17,31 @@ server_configs = [
     "regular_config.json",
     "drop_config.json",
     "fake_leader_config.json",
-    "fake_value_config.json",
     "bad_broadcast_config.json",
     "bad_consensus_config.json",
     "dictator_leader_config.json",
     "silent_leader_config.json",
     "landlord_leader_config.json",
-    "handsy_leader_config.json"
+    "handsy_leader_config.json",
+    "fake_weak_config.json",
+    "force_consensus_read_config.json",
+    "corrupt_leader_config.json",
 ]
 
 client_configs = [
-   "client_config.json",
-   "greedy_client_config.json"
+    "client_config.json",
+    "greedy_client_config.json"
 ]
 
-server_config = server_configs[-1]
+server_config = server_configs[3]
 client_config = client_configs[0]
 block_size = 3
+
 
 def quit_handler(*args):
     os.system(f"pkill -i {terminal}")
     sys.exit()
+
 
 # Compile classes
 os.system("mvn clean install")

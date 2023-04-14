@@ -43,11 +43,13 @@ public class LedgerService implements UDPService {
         this.service = service;
         this.mempool = mempool;
         this.leaderConfig = leaderConfig;
-        if (this.config.isLeader() && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER) {
+        if (this.config.isLeader()
+                && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER) {
             Random r = new Random();
             int randomIndex = r.nextInt(this.clientConfigs.length);
             this.censoredClient = this.clientConfigs[randomIndex];
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - NOT ADDING REQUESTS FROM {1} TO THE MEMPOOL", this.config.getId(), this.censoredClient.getId()));
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - NOT ADDING REQUESTS FROM {1} TO THE MEMPOOL",
+                    this.config.getId(), this.censoredClient.getId()));
         }
     }
 
@@ -120,14 +122,16 @@ public class LedgerService implements UDPService {
         if (this.config.isLeader()
                 && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER
                 && this.censoredClient.getId().equals(request.getSenderId())) {
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - DICTATOR_LEADER, Ignoring LedgerRequestCreate from {1}", this.config.getId(), request.getSenderId()));
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - DICTATOR_LEADER, Ignoring LedgerRequestCreate from {1}",
+                    this.config.getId(), request.getSenderId()));
             return;
         }
 
         if (!verifyClientSignature(request)) {
             // TODO: reply to client
         }
-        if (this.config.isLeader() && this.config.getByzantineBehavior() != ProcessConfig.ByzantineBehavior.SILENT_LEADER)
+        if (this.config.isLeader()
+                && this.config.getByzantineBehavior() != ProcessConfig.ByzantineBehavior.SILENT_LEADER)
             startConsensusIfBlock(mempool.add(request));
         else
             mempool.accept(queue -> {
@@ -145,7 +149,9 @@ public class LedgerService implements UDPService {
         if (this.config.isLeader()
                 && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER
                 && this.censoredClient.getId().equals(request.getSenderId())) {
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - DICTATOR_LEADER, Ignoring LedgerRequestTransfer from {1}", this.config.getId(), request.getSenderId()));
+            LOGGER.log(Level.INFO,
+                    MessageFormat.format("{0} - DICTATOR_LEADER, Ignoring LedgerRequestTransfer from {1}",
+                            this.config.getId(), request.getSenderId()));
             return;
         }
 
@@ -156,22 +162,57 @@ public class LedgerService implements UDPService {
         if (!checkAuthorIsOwner(request))
             return;
 
-        if (this.config.isLeader() && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.HANDSY_LEADER && new Random().nextBoolean()) {
-            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Altered Transfer request {1}", this.config.getId(), request.getSenderId()));
+        // BYZANTINE_TESTS
+        if (this.config.isLeader()
+                && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.HANDSY_LEADER
+                && new Random().nextBoolean()) {
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Altered transfer request {1}", this.config.getId(),
+                    request.getSenderId()));
             LedgerRequestTransfer transfer = request.deserializeTransfer();
             transfer.setAmount(new BigDecimal(transfer.getAmount().intValue() * 2 + 1));
             String requestTransferSerialized = new Gson().toJson(transfer);
-            // String signature;
-            // try {
-            //     signature = RSAEncryption.sign(requestTransferSerialized, config.getPrivateKeyPath());
-            // } catch (Exception e) {
-            //     throw new LedgerException(ErrorMessage.FailedToSignMessage);
-            // }
             request.setMessage(requestTransferSerialized);
-            // request.setClientSignature(signature);
         }
 
-        if (this.config.isLeader() && this.config.getByzantineBehavior() != ProcessConfig.ByzantineBehavior.SILENT_LEADER)
+        // BYZANTINE_TESTS
+        if (this.config.isLeader()
+                && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.CORRUPT_LEADER) {
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Added transfer request {1}", this.config.getId(),
+                    request.getSenderId()));
+
+            LedgerRequestTransfer clientTransfer = request.deserializeTransfer();
+
+            int currentNonce = 0;
+            BigDecimal amount = clientTransfer.getAmount();
+            PublicKey sourcePubKey = clientTransfer.getSourcePubKey();
+            PublicKey destinationPubKey;
+            try {
+                destinationPubKey = RSAEncryption.readPublicKey(this.config.getPublicKeyPath());
+            } catch (Exception e) {
+                throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+            }
+
+            LedgerRequestTransfer requestTransfer = new LedgerRequestTransfer(currentNonce, sourcePubKey,
+                    destinationPubKey,
+                    amount);
+
+            String requestTransferSerialized = new Gson().toJson(requestTransfer);
+            String signature;
+            try {
+                signature = RSAEncryption.sign(requestTransferSerialized, config.getPrivateKeyPath());
+            } catch (Exception e) {
+                throw new LedgerException(ErrorMessage.FailedToSignMessage);
+            }
+
+            LedgerRequest fakeRequest = new LedgerRequest(this.config.getId(), Message.Type.TRANSFER,
+                    requestTransferSerialized,
+                    signature);
+
+            startConsensusIfBlock(mempool.add(fakeRequest));
+        }
+
+        if (this.config.isLeader()
+                && this.config.getByzantineBehavior() != ProcessConfig.ByzantineBehavior.SILENT_LEADER)
             startConsensusIfBlock(mempool.add(request));
         else
             mempool.accept(queue -> {
@@ -185,14 +226,15 @@ public class LedgerService implements UDPService {
         LedgerRequestTransfer transferRequest = request.deserializeTransfer();
         PublicKey pubKey = transferRequest.getSourcePubKey();
         boolean result = false;
-        Optional<ProcessConfig> senderConfig = Arrays.stream(this.clientConfigs).filter(config -> config.getId().equals(request.getSenderId())).findAny();
+        Optional<ProcessConfig> senderConfig = Arrays.stream(this.clientConfigs)
+                .filter(config -> config.getId().equals(request.getSenderId())).findAny();
         if (senderConfig.isEmpty()) {
             LOGGER.log(Level.INFO, MessageFormat.format(
-                "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                        +"@          WARNING: SENDER IS NOT PRESENT IN CONFIG! @\n"
-                        + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                        + "IT IS POSSIBLE THAT CLIENT {0} IS DOING SOMETHING NASTY!",
-                request.getSenderId()));
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "@          WARNING: SENDER IS NOT PRESENT IN CONFIG! @\n"
+                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "IT IS POSSIBLE THAT CLIENT {0} IS DOING SOMETHING NASTY!",
+                    request.getSenderId()));
             return result;
         }
         try {
@@ -203,11 +245,11 @@ public class LedgerService implements UDPService {
 
         if (!result) {
             LOGGER.log(Level.INFO, MessageFormat.format(
-                "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                        +"@          WARNING: SENDER IS NOT SOURCE ACCOUNT!   @\n"
-                        + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
-                        + "IT IS POSSIBLE THAT CLIENT {0} IS DOING SOMETHING NASTY!",
-                request.getSenderId()));
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "@          WARNING: SENDER IS NOT SOURCE ACCOUNT!   @\n"
+                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "IT IS POSSIBLE THAT CLIENT {0} IS DOING SOMETHING NASTY!",
+                    request.getSenderId()));
         }
 
         return result;

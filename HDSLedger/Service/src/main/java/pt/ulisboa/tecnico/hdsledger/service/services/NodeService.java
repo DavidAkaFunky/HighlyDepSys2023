@@ -9,6 +9,7 @@ import pt.ulisboa.tecnico.hdsledger.utilities.ErrorMessage;
 import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
+import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig.ByzantineBehavior;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -19,8 +20,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
-
-import com.google.gson.GsonBuilder;
 
 public class NodeService implements UDPService {
 
@@ -86,8 +85,9 @@ public class NodeService implements UDPService {
 
         this.ledger = new Ledger(this.leaderConfig.getId(), this.leaderPublicKeyHash);
 
-        if (this.config.isLeader() && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.LANDLORD_LEADER) {
-           this.ledger.setFee(this.ledger.getFee().intValue() * 2);
+        if (this.config.isLeader()
+                && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.LANDLORD_LEADER) {
+            this.ledger.setFee(this.ledger.getFee().intValue() * 2);
         }
 
     }
@@ -117,7 +117,15 @@ public class NodeService implements UDPService {
         Map<String, String> signatures = this.ledger.getAccountUpdateSignatures(accountUpdate.getConsensusInstance(),
                 publicKeyHash);
 
-        // Replying with null if account doesn't exist, expected behavior ?
+        // BYZANTINE_TESTS
+        if (this.config.getByzantineBehavior() == ByzantineBehavior.FAKE_WEAK) {
+            accountUpdate = new UpdateAccount(accountUpdate);
+            accountUpdate.setBalance(accountUpdate.getBalance().subtract(BigDecimal.ONE));
+        } else if (this.config.getByzantineBehavior() == ByzantineBehavior.FORCE_CONSENSUS_READ) {
+            accountUpdate = new UpdateAccount(accountUpdate);
+            accountUpdate.setBalance(accountUpdate.getBalance().add(BigDecimal.valueOf(this.config.getPort())));
+        }
+
         LedgerResponse response = new LedgerResponse(this.config.getId(), accountUpdate.isValid(), accountUpdate,
                 signatures,
                 requestBalance.getNonce());
@@ -421,6 +429,48 @@ public class NodeService implements UDPService {
         return true;
     }
 
+    public void applyByzantineBehaviour(ConsensusMessage consensusMessage) {
+        /*
+         * Because other nodes fail to verify the signature, they will not
+         * reply with ACK meaning that this node will be stuck sending messages
+         * forever
+         */
+        switch (config.getByzantineBehavior()) {
+            case FAKE_LEADER -> {
+                LOGGER.log(Level.INFO,
+                        MessageFormat.format("{0} - Byzantine Fake Leader", config.getId()));
+                consensusMessage.setSenderId(this.leaderConfig.getId());
+            }
+            default -> {
+                // Do nothing
+            }
+        }
+    }
+
+    public ConsensusMessage createConsensusMessage(Block block, int instance, int round) {
+        // Sign block
+        String blockSignature;
+        String blockJson = block.toJson();
+        try {
+            blockSignature = RSAEncryption.sign(blockJson, this.config.getPrivateKeyPath());
+        } catch (Exception e) {
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - Error signing block for consensus instance {1}",
+                    config.getId(), instance));
+            e.printStackTrace();
+            throw new LedgerException(ErrorMessage.FailedToSignMessage);
+        }
+
+        PrePrepareMessage prePrepareMessage = new PrePrepareMessage(blockJson, blockSignature);
+
+        ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PRE_PREPARE)
+                .setConsensusInstance(instance)
+                .setRound(round)
+                .setMessage(prePrepareMessage.toJson())
+                .build();
+
+        return consensusMessage;
+    }
+
     /*
      * Start an instance of consensus for a block of transactions
      * Only the current leader will start a consensus instance
@@ -428,7 +478,7 @@ public class NodeService implements UDPService {
      *
      * @param inputBlock Block to be agreed upon
      */
-    public int startConsensus(Block block) {
+    public void startConsensus(Block block) {
 
         // Set initial consensus blocks
         int localConsensusInstance = this.consensusInstance.incrementAndGet();
@@ -438,7 +488,7 @@ public class NodeService implements UDPService {
         if (existingConsensus != null) {
             LOGGER.log(Level.INFO, MessageFormat.format("{0} - Node already started consensus for instance {1}",
                     config.getId(), localConsensusInstance));
-            return localConsensusInstance;
+            return;
         }
 
         // Only start a consensus instance if the last one was decided
@@ -457,36 +507,31 @@ public class NodeService implements UDPService {
 
             InstanceInfo instance = this.instanceInfo.get(localConsensusInstance);
 
-            // Sign block
-            String blockSignature;
-            String blockJson = block.toJson();
-            try {
-                blockSignature = RSAEncryption.sign(blockJson, this.config.getPrivateKeyPath());
-            } catch (Exception e) {
-                LOGGER.log(Level.INFO, MessageFormat.format("{0} - Error signing block for consensus instance {1}",
-                        config.getId(), localConsensusInstance));
-                e.printStackTrace();
-                return -1;
+            if (this.config.getByzantineBehavior() == ByzantineBehavior.BAD_BROADCAST && localConsensusInstance != 1) {
+                LOGGER.log(Level.INFO,
+                        MessageFormat.format("{0} - Node is Byzantine leader, sending alternating PRE-PREPARE messages", config.getId()));
+                
+                int numberOfRequests = block.getRequests().size();
+                List<LedgerRequest> requests = block.getRequests();
+                Block oddBlock = new Block();
+                oddBlock.setConsensusInstance(localConsensusInstance);
+                oddBlock.setRequests(requests.subList(0, numberOfRequests / 2));
+
+                Block evenBlock = new Block();
+                evenBlock.setConsensusInstance(localConsensusInstance);
+                evenBlock.setRequests(requests.subList(numberOfRequests / 2, numberOfRequests));
+
+                this.link.alternatingBroadcast(this.createConsensusMessage(oddBlock, localConsensusInstance, instance.getCurrentRound()),
+                                               this.createConsensusMessage(evenBlock, localConsensusInstance, instance.getCurrentRound()));
+            } else {
+                LOGGER.log(Level.INFO,
+                    MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE message", config.getId()));
+                this.link.broadcast(this.createConsensusMessage(block, localConsensusInstance, instance.getCurrentRound()));
             }
-
-            PrePrepareMessage prePrepareMessage = new PrePrepareMessage(blockJson, blockSignature);
-
-            ConsensusMessage consensusMessage = new ConsensusMessageBuilder(config.getId(), Message.Type.PRE_PREPARE)
-                    .setConsensusInstance(localConsensusInstance)
-                    .setRound(instance.getCurrentRound())
-                    .setMessage(prePrepareMessage.toJson())
-                    .build();
-
-            LOGGER.log(Level.INFO,
-                    MessageFormat.format("{0} - Node is leader, sending PRE-PREPARE messages", config.getId()));
-
-            this.link.broadcast(consensusMessage);
         } else {
             LOGGER.log(Level.INFO,
                     MessageFormat.format("{0} - Node is not leader, waiting for PRE-PREPARE message", config.getId()));
         }
-
-        return localConsensusInstance;
     }
 
     /*
@@ -495,7 +540,7 @@ public class NodeService implements UDPService {
      *
      * @param message Message to be handled
      */
-    public Optional<ConsensusMessage> uponPrePrepare(ConsensusMessage message) {
+    public void uponPrePrepare(ConsensusMessage message) {
 
         int consensusInstance = message.getConsensusInstance();
         int round = message.getRound();
@@ -523,7 +568,7 @@ public class NodeService implements UDPService {
         // Assumption: private keys not leaked
         if (!(checkIfSignedByLeader(prePrepareMessage.getBlock(), prePrepareMessage.getLeaderSignature(), errorLog)
                 && verifyTransactions(block.getRequests(), senderId)))
-            return Optional.empty();
+            return;
 
         // Set instance blocks (node may not receive a call from the client)
         this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(block));
@@ -550,7 +595,8 @@ public class NodeService implements UDPService {
                 .setReplyToMessageId(senderMessageId)
                 .build();
 
-        return Optional.of(consensusMessage);
+        applyByzantineBehaviour(consensusMessage);
+        this.link.broadcast(consensusMessage);
     }
 
     /*
@@ -895,6 +941,17 @@ public class NodeService implements UDPService {
                     while (true) {
                         Message message = link.receive();
 
+                        /*
+                         * Sends ACK to incoming message but doesn't broadcast anything
+                         * Meaning that the other nodes will not be stuck waiting for a reply
+                         */
+                        if (config.getByzantineBehavior() == ByzantineBehavior.DROP) {
+                            LOGGER.log(Level.INFO,
+                                    MessageFormat.format("{0} - Byzantine Don't Reply", config.getId()));
+                            // don't reply
+                            continue;
+                        }
+
                         // Separate thread to handle each message
                         new Thread(() -> {
 
@@ -903,7 +960,7 @@ public class NodeService implements UDPService {
                             switch (message.getType()) {
 
                                 case PRE_PREPARE -> {
-                                    consensusMessage = uponPrePrepare((ConsensusMessage) message);
+                                    uponPrePrepare((ConsensusMessage) message);
                                 }
 
                                 case PREPARE -> {
@@ -940,39 +997,12 @@ public class NodeService implements UDPService {
                                 // BYZANTINE_TESTS
                                 // May apply byzantine behavior for testing purposes
                                 switch (config.getByzantineBehavior()) {
-                                    /*
-                                     * Passive byzantine nodes will behave normally minus the
-                                     * verification of signatures and verification of leader ids
-                                     */
-                                    case NONE, PASSIVE, DICTATOR_LEADER, SILENT_LEADER, LANDLORD_LEADER, HANDSY_LEADER -> {
-                                        this.link.broadcast(consensusMessage.get());
-                                    }
-                                    /*
-                                     * Sends ACK to incoming message but doesn't broadcast anything
-                                     * Meaning that the other nodes will not be stuck waiting for a reply
-                                     */
-                                    case DROP -> {
-                                        LOGGER.log(Level.INFO,
-                                                MessageFormat.format("{0} - Byzantine Don't Reply", config.getId()));
-                                        // don't reply
-                                    }
-                                    /*
-                                     * Because other nodes fail to verify the signature, they will not
-                                     * reply with ACK meaning that this node will be stuck sending messages
-                                     * forever
-                                     */
-                                    case FAKE_LEADER -> {
-                                        LOGGER.log(Level.INFO,
-                                                MessageFormat.format("{0} - Byzantine Fake Leader", config.getId()));
-                                        ConsensusMessage byzantineMessage = consensusMessage.get();
-                                        byzantineMessage.setSenderId(this.leaderConfig.getId());
-                                        this.link.broadcast(byzantineMessage);
-                                    }
+
                                     /*
                                      * Since the byzantine node cant form a quorum of messages with this block,
                                      * the other nodes will never prepare/commit this fake block
                                      */
-                                    case FAKE_VALUE, BAD_CONSENSUS -> {
+                                    case BAD_CONSENSUS -> {
                                         LOGGER.log(Level.INFO,
                                                 MessageFormat.format("{0} - Byzantine Fake Block", config.getId()));
                                         ConsensusMessage byzantineMessage = consensusMessage.get();
@@ -993,6 +1023,13 @@ public class NodeService implements UDPService {
                                                 MessageFormat.format("{0} - Byzantine Fake Block", config.getId()));
                                         // TODO: fix me, go see issue inside
                                         // this.link.badBroadcast(consensusMessage.get());
+                                    }
+                                    /*
+                                     * Passive byzantine nodes will behave normally minus the
+                                     * verification of signatures and verification of leader ids
+                                     */
+                                    default -> {
+                                        this.link.broadcast(consensusMessage.get());
                                     }
                                 }
                             }
