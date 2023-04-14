@@ -9,8 +9,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.text.MessageFormat;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import pt.ulisboa.tecnico.hdsledger.communication.CommitMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.ConsensusMessage;
 import pt.ulisboa.tecnico.hdsledger.communication.PrepareMessage;
@@ -89,6 +87,27 @@ public class MessageBucket {
         // greater than or equal to the quorum size
         return messages.values().stream().filter(
                 consensusMessages -> consensusMessages.size() >= quorumSize).findFirst();
+    }
+
+    public void verifyReceivedCommitMessage(CommitMessage quorumMessage, int instance, int round) {
+        int quorumHash = quorumMessage
+                .getUpdateAccountSignatures().values().stream()
+                .map(UpdateAccount::hashCode)
+                .reduce(0, (acc, next) -> acc ^ next);
+        bucket.get(instance).get(round).values().forEach((message) -> {
+            CommitMessage commitMessage = message.deserializeCommitMessage();
+            int messageHash = commitMessage
+                    .getUpdateAccountSignatures().values().stream()
+                    .map(UpdateAccount::hashCode)
+                    .reduce(0, (acc, next) -> acc ^ next);
+            if (quorumHash != messageHash)
+                LOGGER.log(Level.INFO, MessageFormat.format(
+                        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                +"@  WARNING: DIFFERENT COMMIT VALUES RECEIVED!  @\n"
+                                + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                                + "IT IS POSSIBLE THAT NODE {0} IS DOING SOMETHING NASTY!",
+                        message.getSenderId()));
+        });
     }
 
     public void verifyReceivedPrepareMessage(Block block, int instance, int round) {

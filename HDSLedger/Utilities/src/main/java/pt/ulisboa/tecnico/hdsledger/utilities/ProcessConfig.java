@@ -29,6 +29,7 @@ public class ProcessConfig {
 
         GREEDY_CLIENT("GREEDY_CLIENT"),
         SILENT_LEADER("SILENT_LEADER"),
+        LANDLORD_LEADER("LANDLORD_LEADER"),
         DICTATOR_LEADER("DICTATOR_LEADER");
 
         String behavior;

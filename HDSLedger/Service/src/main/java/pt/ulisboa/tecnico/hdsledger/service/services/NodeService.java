@@ -86,6 +86,10 @@ public class NodeService implements UDPService {
 
         this.ledger = new Ledger(this.leaderConfig.getId(), this.leaderPublicKeyHash);
 
+        if (this.config.isLeader() && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.LANDLORD_LEADER) {
+           this.ledger.setFee(this.ledger.getFee().intValue() * 2);
+        }
+
     }
 
     public ProcessConfig getConfig() {
@@ -749,7 +753,9 @@ public class NodeService implements UDPService {
 
             // They are all the same, so we can just get the first one
             CommitMessage quorumCommitMessage = commitQuorum.get().stream().toList().get(0).deserializeCommitMessage();
-            Map<String, UpdateAccount> accountUpdates = quorumCommitMessage.getUpdateAccountSignatures();
+
+            // Check if any of the commit messages received was different
+            commitMessages.verifyReceivedCommitMessage(quorumCommitMessage, consensusInstance, round);
 
             // Verify if update accounts are valid or not
             boolean successfulAdd = quorumCommitMessage.isValidBlock();
@@ -938,7 +944,7 @@ public class NodeService implements UDPService {
                                      * Passive byzantine nodes will behave normally minus the
                                      * verification of signatures and verification of leader ids
                                      */
-                                    case NONE, PASSIVE, DICTATOR_LEADER -> {
+                                    case NONE, PASSIVE, DICTATOR_LEADER, SILENT_LEADER, LANDLORD_LEADER -> {
                                         this.link.broadcast(consensusMessage.get());
                                     }
                                     /*

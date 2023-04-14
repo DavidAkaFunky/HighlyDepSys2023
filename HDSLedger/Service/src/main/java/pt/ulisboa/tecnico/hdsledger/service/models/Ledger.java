@@ -32,7 +32,7 @@ public class Ledger {
     // signature
     private final Map<Integer, Map<String, Map<String, String>>> accountUpdateSignatures = new ConcurrentHashMap<>();
 
-    private final BigDecimal fee = BigDecimal.ONE;
+    private BigDecimal fee = BigDecimal.ONE;
 
     private Account temporaryLeaderAccount;
 
@@ -214,6 +214,14 @@ public class Ledger {
 
     public UpdateAccount getAccountUpdate(int consensusInstance, String publicKeyHash) {
         return this.accountUpdates.get(consensusInstance).get(publicKeyHash);
+    }
+
+    public void setFee(int fee) {
+        this.fee = new BigDecimal(fee);
+    }
+
+    public BigDecimal getFee() {
+        return this.fee;
     }
 
 }

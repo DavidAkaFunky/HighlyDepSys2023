@@ -19,6 +19,9 @@ transfer 12 1  ---> self receber do 12
 2. Nao fazer bloco (aka nao comecar consenso)
   Expected:
 
+**WORKING**
+**PARA MOSTRAR AO BALTASAR: Mostrar isto a nao fazer consensos e esperar 30s para imprimir mensagem a reclamar**
+
 4. Lider tirar mais do que devia na fee
   Expected: outros recusam updateaccount e o consenso prossegueu com o valor
     correto
