@@ -20,6 +20,7 @@ server_configs = [
     "fake_value_config.json",
     "bad_broadcast_config.json",
     "bad_consensus_config.json",
+    "dictator_leader.json",
 ]
 
 client_configs = [
@@ -27,8 +28,8 @@ client_configs = [
    "greedy_client_config.json"
 ]
 
-server_config = server_configs[0]
-client_config = client_configs[1]
+server_config = server_configs[-1]
+client_config = client_configs[0]
 block_size = 3
 
 def quit_handler(*args):

@@ -8,14 +8,11 @@ import pt.ulisboa.tecnico.hdsledger.utilities.LedgerException;
 import pt.ulisboa.tecnico.hdsledger.utilities.RSAEncryption;
 
 import java.io.IOException;
-import java.security.NoSuchAlgorithmException;
-import java.security.spec.InvalidKeySpecException;
+import java.security.PublicKey;
 import java.text.MessageFormat;
+import java.util.*;
 import java.util.logging.Level;
-import java.util.Arrays;
-import java.util.Optional;
-import java.util.Timer;
-import java.util.TimerTask;
+
 import pt.ulisboa.tecnico.hdsledger.utilities.ProcessConfig;
 
 public class LedgerService implements UDPService {
@@ -33,6 +30,8 @@ public class LedgerService implements UDPService {
     private final Mempool mempool;
     // Leader configuration
     private final ProcessConfig leaderConfig;
+    // Used for BYZANTINE_TESTS
+    private ProcessConfig censoredClient = null;
 
     public LedgerService(ProcessConfig[] clientConfigs, PerfectLink link, ProcessConfig config,
             NodeService service, Mempool mempool, ProcessConfig leaderConfig) {
@@ -42,6 +41,12 @@ public class LedgerService implements UDPService {
         this.service = service;
         this.mempool = mempool;
         this.leaderConfig = leaderConfig;
+        if (this.config.isLeader() && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER) {
+            Random r = new Random();
+            int randomIndex = r.nextInt(this.clientConfigs.length);
+            this.censoredClient = this.clientConfigs[randomIndex];
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - NOT ADDING REQUESTS FROM {1} TO THE MEMPOOL", this.config.getId(), this.censoredClient.getId()));
+        }
     }
 
     /*
@@ -110,6 +115,13 @@ public class LedgerService implements UDPService {
                 MessageFormat.format("{0} - Received LedgerRequestCreate from {1}", this.config.getId(),
                         request.getSenderId()));
 
+        if (this.config.isLeader()
+                && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER
+                && this.censoredClient.getId().equals(request.getSenderId())) {
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - DICTATOR_LEADER, Ignoring LedgerRequestCreate from {1}", this.config.getId(), request.getSenderId()));
+            return;
+        }
+
         if (!verifyClientSignature(request)) {
             // TODO: reply to client
         }
@@ -127,6 +139,13 @@ public class LedgerService implements UDPService {
         LOGGER.log(Level.INFO,
                 MessageFormat.format("{0} - Received LedgerRequestTransfer from {1}", this.config.getId(),
                         request.getSenderId()));
+
+        if (this.config.isLeader()
+                && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER
+                && this.censoredClient.getId().equals(request.getSenderId())) {
+            LOGGER.log(Level.INFO, MessageFormat.format("{0} - DICTATOR_LEADER, Ignoring LedgerRequestTransfer from {1}", this.config.getId(), request.getSenderId()));
+            return;
+        }
 
         if (!verifyClientSignature(request)) {
             // TODO: reply to client
@@ -146,8 +165,8 @@ public class LedgerService implements UDPService {
     }
 
     private boolean checkAuthorIsOwner(LedgerRequest request) {
-        var transferRequest = request.deserializeTransfer();
-        var pubKey = transferRequest.getSourcePubKey();
+        LedgerRequestTransfer transferRequest = request.deserializeTransfer();
+        PublicKey pubKey = transferRequest.getSourcePubKey();
         boolean result = false;
         Optional<ProcessConfig> senderConfig = Arrays.stream(this.clientConfigs).filter(config -> config.getId().equals(request.getSenderId())).findAny();
         if (senderConfig.isEmpty()) {

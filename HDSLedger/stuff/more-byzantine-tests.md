@@ -4,17 +4,20 @@ Transfer from other accounts to himself
 Alterar o transfer para fazer a operacao ao contrario
 transfer 12 1  ---> self receber do 12 
 
+**WORKING**
+**PARA MOSTRAR AO BALTASAR: Isto recusa logo o pedido, logo tem de se fazer mais um para o consenso ocorrer**
+
 # Byzantine Nodes
 
 ## Leader
 1. Nao meter no bloco operacoes de um cliente especifico
   Expected: timer explodir
 
+**WORKING**
+**PARA MOSTRAR AO BALTASAR: Mostrar isto a fazer consensos e esperar 30s para imprimir mensagem a reclamar**
+
 2. Nao fazer bloco (aka nao comecar consenso)
   Expected:
-
-3. Nao propor nada
-  Expected: timer explodir
 
 4. Lider tirar mais do que devia na fee
   Expected: outros recusam updateaccount e o consenso prossegueu com o valor

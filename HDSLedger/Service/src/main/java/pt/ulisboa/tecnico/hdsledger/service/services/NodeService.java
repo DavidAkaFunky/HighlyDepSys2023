@@ -938,7 +938,7 @@ public class NodeService implements UDPService {
                                      * Passive byzantine nodes will behave normally minus the
                                      * verification of signatures and verification of leader ids
                                      */
-                                    case NONE, PASSIVE -> {
+                                    case NONE, PASSIVE, DICTATOR_LEADER -> {
                                         this.link.broadcast(consensusMessage.get());
                                     }
                                     /*

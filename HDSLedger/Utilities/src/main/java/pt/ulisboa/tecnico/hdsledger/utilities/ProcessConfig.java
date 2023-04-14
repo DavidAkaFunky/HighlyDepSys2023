@@ -27,7 +27,8 @@ public class ProcessConfig {
         BAD_BROADCAST("BAD_BROADCAST"),
         BAD_CONSENSUS("BAD_CONSENSUS"),
 
-        GREEDY_CLIENT("GREEDY_CLIENT");
+        GREEDY_CLIENT("GREEDY_CLIENT"),
+        DICTATOR_LEADER("DICTATOR_LEADER");
 
         String behavior;
 
