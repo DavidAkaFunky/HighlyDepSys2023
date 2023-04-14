@@ -1,4 +1,6 @@
 # Byzantine Client
+## For One Client
+### GREEDY CLIENT
 Transfer from other accounts to himself
 
 Alterar o transfer para fazer a operacao ao contrario
@@ -14,15 +16,26 @@ troca a source e destination dos transfer requests. Isto não passa pois a chave
 # Byzantine Nodes
 
 ## Leader
-1. Nao meter no bloco operacoes de um cliente especifico
+### DICTATOR LEADER
+1. Nao meter no bloco operacoes de um cliente especifico 
   Expected: timer explodir
   **WORKING**
   **PARA MOSTRAR AO BALTASAR: Mostrar isto a fazer consensos e esperar 30s para imprimir mensagem a reclamar**
 
+Implementação:
+O cliente faz sempre broadcast das operações para `f + 1` réplicas, incluíndo o lider. No pior caso apenas uma é correta.
+Se passar um threshold de tempo desde que a réplica correta recebeu o pedido e ainda não foi emitido nenhum bloco com o mesmo,
+a réplica reclama. (Na realidade iria enviar um `complain` ou assim)
+O cliente que é censurado é escolhido aleatóriamente pelo Líder sempre que o sistema é inicializado.
+
+### SILENT LEADER
 2. Nao fazer bloco (aka nao comecar consenso)
   Expected:
   **WORKING**
   **PARA MOSTRAR AO BALTASAR: Mostrar isto a nao fazer consensos e esperar 30s para imprimir mensagem a reclamar**
+
+Implementação:
+Muito semelhante ao caso anterior mas generalizado.
 
 3. Líder tira mais do que devia na fee
   Expected: outros recusam updateaccount e o consenso prossegueu com o valor

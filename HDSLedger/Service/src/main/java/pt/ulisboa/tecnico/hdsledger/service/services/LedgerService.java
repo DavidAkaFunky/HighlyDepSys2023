@@ -43,6 +43,7 @@ public class LedgerService implements UDPService {
         this.service = service;
         this.mempool = mempool;
         this.leaderConfig = leaderConfig;
+        // BYZANTINE_TESTS
         if (this.config.isLeader()
                 && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER) {
             Random r = new Random();
@@ -119,6 +120,7 @@ public class LedgerService implements UDPService {
                 MessageFormat.format("{0} - Received LedgerRequestCreate from {1}", this.config.getId(),
                         request.getSenderId()));
 
+        // BYZANTINE_TESTS
         if (this.config.isLeader()
                 && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER
                 && this.censoredClient.getId().equals(request.getSenderId())) {
@@ -146,6 +148,7 @@ public class LedgerService implements UDPService {
                 MessageFormat.format("{0} - Received LedgerRequestTransfer from {1}", this.config.getId(),
                         request.getSenderId()));
 
+        // BYZANTINE_TESTS
         if (this.config.isLeader()
                 && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.DICTATOR_LEADER
                 && this.censoredClient.getId().equals(request.getSenderId())) {
