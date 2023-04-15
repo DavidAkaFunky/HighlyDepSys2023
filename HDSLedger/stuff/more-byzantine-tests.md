@@ -37,31 +37,60 @@ O cliente que é censurado é escolhido aleatóriamente pelo Líder sempre que o
 Implementação:
 Muito semelhante ao caso anterior mas generalizado.
 
+### LANDLORD LEADER
 3. Líder tira mais do que devia na fee
   Expected: outros recusam updateaccount e o consenso prossegueu com o valor
     correto
   **WORKING**
   **PARA MOSTRAR AO BALTASAR: Mostrar isto fazer consensos e descontar certo mas avisa que houve updateAccount diferente**
 
+Implementação:
+Ao inicializar o sistema o lider aumenta a sua propria fee (fixa e guardada numa variavel),
+logo, ao taxar qualquer operacao de escrita ira cobrar mais do que o esperado pelas
+outras replicas. Isto é detetado ao verificar os quoruns das mensagens de commit
+pois os update balances gerados pelo lider sao != dos restantes. Apesar disto
+como é possivel alcançar um quorum, o consenso termina com o resultado correto (ate no lider).
+
+### HANDSY LEADER
 4. Modificar requests que recebeu que mete no bloco
   Expected: arrebentar nas assinaturas
   **WORKING**
   **PARA MOSTRAR AO BALTASAR: Mostrar avisos das assinaturas não darem match + queixas da censura**
 
+Implementação:
+SO MODIFICA TRANSFERS.
+Ao receber uma transfer, o lider ira duplicar o valor da mesma e somar mais um.
+(rebenta no uponPrePrepare)
+
+### CORRUPT LEADER
 5. Adicionar requests falsos que aumentam o seu balance
   Expected: arrebentam na assinatura
   **WORKING**
   **PARA MOSTRAR AO BALTASAR: Mostrar avisos das assinaturas não darem match + queixas da censura**
 
+Implementação:
+Ao receber uma transfer de qualquer cliente, o lider vai injetar na propria mempool uma nova
+transfer desse cliente para si proprio (assinada pelo lider). Isto vai falhar pois
+no uponPrePrepare verificamos se as transacoes sao assinadas pela source da mesma.
+
 12. Weak read devolver garbage (update account errado ou assinaturas erradas)
    **WORKING**
   **PARA MOSTRAR AO BALTASAR: Fazer balance 10 weak e mostrar que dá invalid response**
+
+Implementação:
+Somamos mais um no NodeService(read) para o cliente rebentar e dizer que o update account
+nao bate certo com as assinaturas do mesmo.
 
 13. Force consensus read
   Expected: works
   **WORKING**  
   **PARA MOSTRAR AO BALTASAR: criar 3 contas fazer duas transferencias e um read (da trigger ao consenso)**
 
+Implementação:
+Semelhante ao anterior mas cada replica soma o seu port ao valor do update account.
+Isto vai fazer comecar um consenso.
+
+### Bad Broadcast
 14. different blocks to different nodes
  Expected: either consensus doesnt progress or all decide the same
 
@@ -81,7 +110,7 @@ Muito semelhante ao caso anterior mas generalizado.
   **TESTING TO DO**
 
 10. Sending different messages to different nodes
-  **IMPLICITLY COVERED IN OTHER TESTS?**
+  **IMPLICITLY COVERED IN OTHER TESTS**
 
 11. Sending messages with a value different from the one pre-prepared
   **ALREADY COVERED IN TESTS THAT MODIFY THE BLOCK**

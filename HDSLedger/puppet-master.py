@@ -23,9 +23,9 @@ server_configs = [
     "silent_leader_config.json",
     "landlord_leader_config.json",
     "handsy_leader_config.json",
+    "corrupt_leader_config.json",
     "fake_weak_config.json",
     "force_consensus_read_config.json",
-    "corrupt_leader_config.json",
 ]
 
 client_configs = [
@@ -33,7 +33,7 @@ client_configs = [
     "greedy_client_config.json"
 ]
 
-server_config = server_configs[0]
+server_config = server_configs[11]
 client_config = client_configs[0]
 block_size = 3
 

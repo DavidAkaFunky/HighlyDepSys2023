@@ -571,6 +571,10 @@ public class NodeService implements UDPService {
                 && verifyTransactions(block.getRequests(), senderId)))
             return;
 
+        for (var req : block.getRequests())
+            if ((req.getType() == Type.TRANSFER || req.getType() == Type.CREATE) && !checkAuthorIsOwner(req))
+                return;
+
         // Set instance blocks (node may not receive a call from the client)
         this.instanceInfo.putIfAbsent(consensusInstance, new InstanceInfo(block));
 
@@ -709,6 +713,45 @@ public class NodeService implements UDPService {
                 link.send(senderMessage.getSenderId(), m);
             });
         }
+    }
+
+    private boolean checkAuthorIsOwner(LedgerRequest request) {
+        PublicKey pubKey;
+        if (request.getType() == Type.CREATE) {
+            LedgerRequestCreate createRequest = request.deserializeCreate();
+            pubKey = createRequest.getAccountPubKey();
+        } else {
+            LedgerRequestTransfer transferRequest = request.deserializeTransfer();
+            pubKey = transferRequest.getSourcePubKey();
+        }
+        boolean result = false;
+        Optional<ProcessConfig> senderConfig = Arrays.stream(this.clientsConfig)
+                .filter(config -> config.getId().equals(request.getSenderId())).findAny();
+        if (senderConfig.isEmpty()) {
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "@          WARNING: SENDER IS NOT PRESENT IN CONFIG! @\n"
+                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "IT IS POSSIBLE THAT CLIENT {0} IS DOING SOMETHING NASTY!",
+                    request.getSenderId()));
+            return result;
+        }
+        try {
+            result = RSAEncryption.readPublicKey(senderConfig.get().getPublicKeyPath()).equals(pubKey);
+        } catch (Exception e) {
+            throw new LedgerException(ErrorMessage.FailedToReadPublicKey);
+        }
+
+        if (!result) {
+            LOGGER.log(Level.INFO, MessageFormat.format(
+                    "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "@          WARNING: SENDER IS NOT SOURCE ACCOUNT!   @\n"
+                            + "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n"
+                            + "IT IS POSSIBLE THAT CLIENT {0} IS DOING SOMETHING NASTY!",
+                    request.getSenderId()));
+        }
+
+        return result;
     }
 
     /*
@@ -955,83 +998,39 @@ public class NodeService implements UDPService {
                         // Separate thread to handle each message
                         new Thread(() -> {
 
-                            Optional<ConsensusMessage> consensusMessage = Optional.empty();
-
                             switch (message.getType()) {
 
-                                case PRE_PREPARE -> {
+                                case PRE_PREPARE ->
                                     uponPrePrepare((ConsensusMessage) message);
-                                }
 
-                                case PREPARE -> {
+
+                                case PREPARE ->
                                     uponPrepare((ConsensusMessage) message);
-                                }
 
-                                case COMMIT -> {
+
+                                case COMMIT ->
                                     uponCommit((ConsensusMessage) message);
-                                }
 
-                                case ACK -> {
+
+                                case ACK ->
                                     LOGGER.log(Level.INFO, MessageFormat.format("{0} - Received ACK message from {1}",
                                             config.getId(), message.getSenderId()));
                                     // ignore
-                                }
 
-                                case IGNORE -> {
+
+                                case IGNORE ->
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received IGNORE message from {1}",
                                                     config.getId(), message.getSenderId()));
                                     // ignore
-                                }
 
-                                default -> {
+
+                                default ->
                                     LOGGER.log(Level.INFO,
                                             MessageFormat.format("{0} - Received unknown message from {1}",
                                                     config.getId(), message.getSenderId()));
                                     // ignore
-                                }
-                            }
 
-                            if (consensusMessage.isPresent()) {
-
-                                // BYZANTINE_TESTS
-                                // May apply byzantine behavior for testing purposes
-                                switch (config.getByzantineBehavior()) {
-
-                                    /*
-                                     * Since the byzantine node cant form a quorum of messages with this block,
-                                     * the other nodes will never prepare/commit this fake block
-                                     */
-                                    case BAD_CONSENSUS -> {
-                                        LOGGER.log(Level.INFO,
-                                                MessageFormat.format("{0} - Byzantine Fake Block", config.getId()));
-                                        ConsensusMessage byzantineMessage = consensusMessage.get();
-                                        /*
-                                         * TODO: fix me, need to find a way to send byzantine blocks
-                                         * List<String> byzantineArgs = byzantineMessage.getArgs();
-                                         * byzantineMessage.setArgs(byzantineArgs);
-                                         * byzantineArgs.set(byzantineArgs.size() - 1, "BYZANTINE_VALUE");
-                                         * this.link.broadcast(byzantineMessage);
-                                         */
-                                    }
-                                    /*
-                                     * Broadcast different messages to different nodes but same as FAKE_VALUE test
-                                     * this will not affect the consensus
-                                     */
-                                    case BAD_BROADCAST -> {
-                                        LOGGER.log(Level.INFO,
-                                                MessageFormat.format("{0} - Byzantine Fake Block", config.getId()));
-                                        // TODO: fix me, go see issue inside
-                                        // this.link.badBroadcast(consensusMessage.get());
-                                    }
-                                    /*
-                                     * Passive byzantine nodes will behave normally minus the
-                                     * verification of signatures and verification of leader ids
-                                     */
-                                    default -> {
-                                        this.link.broadcast(consensusMessage.get());
-                                    }
-                                }
                             }
 
                         }).start();

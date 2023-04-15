@@ -130,7 +130,7 @@ public class LedgerService implements UDPService {
         }
 
         if (!verifyClientSignature(request)) {
-            // TODO: reply to client
+            return;
         }
         // BYZANTINE_TESTS
         if (this.config.isLeader()
@@ -160,7 +160,7 @@ public class LedgerService implements UDPService {
         }
 
         if (!verifyClientSignature(request)) {
-            // TODO: reply to client
+            return;
         }
 
         if (!checkAuthorIsOwner(request))
@@ -266,7 +266,7 @@ public class LedgerService implements UDPService {
                         request.getSenderId()));
 
         if (!verifyClientSignature(request)) {
-            // TODO: reply to client
+            return;
         }
 
         LedgerRequestBalance balanceRequest = request.deserializeBalance();
