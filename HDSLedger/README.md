@@ -48,6 +48,7 @@ Can be found inside the `resources/` folder of the `Client` module.
     "port": <CLIENT_PORT>,
     "publicKeyPath": "../PKI/client<CLIENT_ID>.pub",
     "privateKeyPath": "../PKI/client<CLIENT_ID>.priv",
+    "byzantineBehavior": <BYZANTINE_BEHAVIOR>,
 }
 ```
 
