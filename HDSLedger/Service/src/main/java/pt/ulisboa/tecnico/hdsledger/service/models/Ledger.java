@@ -128,7 +128,7 @@ public class Ledger {
             PublicKey destinationPubKey,
             PublicKey leaderPubKey) {
 
-        if (amount.compareTo(BigDecimal.ZERO) <= 0)
+        if (amount.compareTo(BigDecimal.ZERO) < 0)
             return new ArrayList<>();
 
         String srcHash;

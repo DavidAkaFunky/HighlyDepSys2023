@@ -85,6 +85,7 @@ public class NodeService implements UDPService {
 
         this.ledger = new Ledger(this.leaderConfig.getId(), this.leaderPublicKeyHash);
 
+        // BYZANTINE_TESTS
         if (this.config.isLeader()
                 && this.config.getByzantineBehavior() == ProcessConfig.ByzantineBehavior.LANDLORD_LEADER) {
             this.ledger.setFee(this.ledger.getFee().intValue() * 2);
@@ -846,8 +847,7 @@ public class NodeService implements UDPService {
 
                                 LedgerResponse response = responses.get(request.getSenderId());
                                 if (response == null) {
-                                    UpdateAccount updateAccount = this.ledger.getAccount(accountHashPublicKey)
-                                            .getMostRecentAccountUpdate();
+                                    UpdateAccount updateAccount = this.ledger.getAccountUpdate(consensusInstance, accountHashPublicKey);
 
                                     response = new LedgerResponse(this.config.getId(), successfulAdd,
                                             updateAccount,

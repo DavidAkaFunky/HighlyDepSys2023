@@ -33,7 +33,7 @@ client_configs = [
     "greedy_client_config.json"
 ]
 
-server_config = server_configs[3]
+server_config = server_configs[0]
 client_config = client_configs[0]
 block_size = 3
 
